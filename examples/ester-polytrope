@@ -1,0 +1,18 @@
+let
+    param int nr, nt
+    param int nex
+    param double omega
+    param double n
+
+    var phi, phi0, phi_ex, lambda
+
+    h = 1 - lambda * (phi - phi0) + .5 * pow(omega, 2) * pow(r*sin(theta), 2)
+
+in
+    lap(phi) = pow(sqrt(h * h), n)
+    lap(phi_ex) = 0
+
+with
+    diff(phi, r) = 0         at r = 0
+    diff(phi, r) + phi = 0   at r = 1
+
