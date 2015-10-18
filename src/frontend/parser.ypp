@@ -1,0 +1,206 @@
+%{
+#include "IR.h"
+#include "SymTab.h"
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+
+extern "C" {
+#include <unistd.h>
+}
+
+#include "parser.hpp"
+#include "IR.h"
+#include "FrontEnd.h"
+#include "Printer.h"
+#include "config.h"
+#
+extern int yylineno;
+extern int yylex();
+extern int yyerror(const char *s);
+
+int parse_eq = 0;
+ir::Program *prog = NULL;
+
+SymTab *progParams = NULL;
+
+extern std::string *filename;
+
+#define LOC(line) std::string(*filename).append(":").append(std::to_string(line))
+
+%}
+
+%union {
+    int num;
+    double real;
+    std::string *str;
+
+    ir::Node *node;
+    ir::Expr *expr;
+    ir::IndexRange *indexRange;
+    ir::IndexRangeList *indexRangeList;
+    ir::ArgumentList *argList;
+    ir::UnaryOperator *unaryOp;
+    ir::Value *value;
+    ir::Equation *eq;
+    ir::BoundaryCondition *bc;
+    ir::Declaration *decl;
+    ir::DeclarationList *declList;
+    ir::EquationList *eqList;
+    ir::BoundaryConditionList *bcList;
+    ir::Program *program;
+    ir::Param *param;
+    std::vector<std::string *> *idList;
+}
+
+%token <real> REAL
+%token <num> NUM
+%token <str> ID KW_TYPE
+
+%token KW_LET KW_IN KW_WITH KW_AT
+%token KW_PARAM KW_VAR
+
+%type<expr> expr primary_expr postfix_expr unary_expr factor const
+
+%type<bc> bc
+%type<decl> declaration
+%type<eq> equation
+%type<indexRange> index
+%type<unaryOp> unary_operator
+
+%type<indexRangeList> index_list
+%type<eqList> equation_list
+%type<bcList> bc_list
+%type<declList> declaration_list
+%type<argList> arg_list
+%type<program> program
+%type<idList> var_names
+
+%%
+
+program
+: KW_LET declaration_list KW_IN equation_list KW_WITH bc_list
+                                    { $$ = new ir::Program(progParams, $2, $4, $6);
+                                      prog = $$; }
+;
+
+declaration_list
+: declaration_list declaration      { $$ = $1; if ($2) $$->push_back($2); }
+| declaration                       { $$ = new ir::DeclarationList();
+                                      if ($1) $$->push_back($1); }
+;
+
+equation_list
+: equation_list equation            { $$ = $1; $$->push_back($2); }
+| equation                          { $$ = new ir::EquationList();
+;                                     $$->push_back($1); }
+
+bc_list
+: bc_list bc                        { $$ = $1; $$->push_back($2); }
+| bc                                { $$ = new ir::BoundaryConditionList();
+;                                     $$->push_back($1); }
+
+declaration
+: postfix_expr '=' expr             { $$ = new ir::Declaration($1, $3, LOC(yylineno)); }
+| param_list                        { $$ = NULL; /* do nothing */ }
+;
+
+param_list
+: KW_PARAM KW_TYPE var_names        { if (progParams == NULL) progParams = new SymTab();
+                                      for (auto n: *$3) {
+                                          progParams->add(new ir::Param(*n, *$2));
+                                      } }
+| KW_VAR var_names                  { if (progParams == NULL) progParams = new SymTab();
+                                      for (auto n: *$2) {
+                                          progParams->add(new ir::Variable(*n));
+                                      } }
+;
+
+var_names
+: var_names ',' ID                  { $$ = $1; $$->push_back($3); }
+| ID                                { $$ = new std::vector<std::string *>();
+                                      $$->push_back($1); }
+;
+
+expr
+: factor                            { $$ = $1; }
+| expr '+' factor                   { $$ = new ir::BinaryExpr($1,
+                                                    new ir::BinaryOperator("+"),
+                                                    $3, LOC(yylineno)); }
+| expr '-' factor                   { $$ = new ir::BinaryExpr($1,
+                                                    new ir::BinaryOperator("-"),
+                                                    $3, LOC(yylineno)); }
+;
+
+factor
+: unary_expr                        { $$ = $1; }
+| factor '*' unary_expr             { $$ = new ir::BinaryExpr($1,
+                                                    new ir::BinaryOperator("*"),
+                                                    $3, LOC(yylineno)); }
+| factor '/' unary_expr             { $$ = new ir::BinaryExpr($1,
+                                                    new ir::BinaryOperator("/"),
+                                                    $3, LOC(yylineno)); }
+// | factor '^' unary_expr             { $$ = new ir::BinaryExpr($1,
+//                                                     new ir::BinaryOperator("^"),
+//                                                     $3, LOC(yylineno)); }
+;
+
+unary_expr
+: postfix_expr                      { $$ = $1; }
+| unary_operator unary_expr         { $$ = new ir::UnaryExpr($2, $1, LOC(yylineno)); }
+;
+
+unary_operator
+: '-'                               { $$ = new ir::UnaryOperator("-"); }
+;
+
+postfix_expr
+: primary_expr                      { $$ = $1; }
+| ID '[' index_list ']'             { $$ = new ir::ArrayExpr($1, $3, LOC(yylineno)); }
+| ID '('  arg_list  ')'             { $$ = new ir::FunctionCall($1, $3, LOC(yylineno)); }
+| ID '('          ')'               { $$ = new ir::FunctionCall($1, LOC(yylineno)); }
+;
+
+primary_expr
+: ID                                { $$ = new ir::Identifier($1, LOC(yylineno)); }
+| const                             { $$ = $1; }
+| '(' expr ')'                      { $$ = $2; }
+;
+
+arg_list
+: expr                              { $$ = new ir::ArgumentList(); $$->push_back($1); }
+| arg_list ',' expr                 { $$ = $1; $$->push_back($3); }
+;
+
+index_list
+: index                             { $$ = new ir::IndexRangeList(); $$->push_back($1); }
+| index_list ',' index              { $$ = $1; $$->push_back($3); }
+;
+
+index
+: primary_expr                      { $$ = new ir::IndexRange($1, $1); }
+| primary_expr ':' primary_expr     { $$ = new ir::IndexRange($1, $3); }
+;
+
+const
+: NUM                               { $$ = new ir::IntValue($1); }
+| REAL                              { $$ = new ir::RealValue($1); }
+;
+
+equation
+: expr '=' expr                     { $$ = new ir::Equation($1, $3); }
+;
+
+bc
+: equation KW_AT equation           { $$ = new ir::BoundaryCondition($1, $3); }
+;
+
+%%
+
+int yyerror(const char *s) {
+    std::cerr <<  "Error at " << *filename << ":" << yylineno << ": "
+              << s << "\n";
+    exit(1);
+}
+

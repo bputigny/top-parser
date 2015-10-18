@@ -1,0 +1,40 @@
+%{
+
+#include <string>
+#include "IR.h"
+
+#include "parser.hpp"
+
+extern int yylineno;
+int comment = 0;
+%}
+
+%option yylineno
+%option noyywrap
+%option nounput
+
+D			[0-9]
+L			[a-zA-Z_]
+SPACE		[ \t]
+
+%%
+
+\n              { comment = 0; }
+"#"             { comment = 1; }
+"let"           { if (!comment) { return KW_LET;} }
+"param"         { if (!comment) { return KW_PARAM;} }
+"var"           { if (!comment) { return KW_VAR;} }
+"in"            { if (!comment) { return KW_IN;} }
+"with"          { if (!comment) { return KW_WITH;} }
+"at"            { if (!comment) { return KW_AT;} }
+"int"           { if (!comment) { yylval.str = new std::string(strdup(yytext)); return KW_TYPE;} }
+"double"        { if (!comment) { yylval.str = new std::string(strdup(yytext)); return KW_TYPE;} }
+{L}({L}|{D})*   { if (!comment) { yylval.str = new std::string(strdup(yytext)); return ID;} }
+{D}+            { if (!comment) { yylval.num = atoi(yytext); return NUM;} }
+{D}*\.{D}+      { if (!comment) { yylval.real = atof(yytext); return REAL;} }
+{D}+\.{D}*      { if (!comment) { yylval.real = atof(yytext); return REAL;} }
+{SPACE}         { /* DO NOTHING	*/ }
+.               { if (!comment) { return *yytext;} }
+
+%%
+
