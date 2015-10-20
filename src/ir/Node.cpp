@@ -21,17 +21,49 @@ bool BinaryExpr::isVar() {
     return false;
 }
 
-IntValue::IntValue(int val) {
-    value = val;
-}
+std::vector<int> BinaryExpr::getDim() {
+    std::vector<int> leftDim = leftOperand->getDim();
+    std::vector<int> rightDim = rightOperand->getDim();
+    std::vector<int> ret = std::vector<int>();
 
-RealValue::RealValue(double val) {
-    value = val;
+    if (leftDim.size() != rightDim.size()) {
+        if (leftDim[0] == -1)
+            return rightDim;
+        if (rightDim[0] == -1)
+            return leftDim;
+        std::cerr << "dimension of operand " << *leftOperand <<
+            " and " << *rightOperand << " differs ("<< leftDim.size() <<
+            " /= " << rightDim.size() << ")\n";
+        exit(1);
+    }
+
+    for (int i=0; i<leftDim.size(); i++) {
+        if (leftDim[i] == rightDim[i])
+            ret.push_back(leftDim[i]);
+        else if (leftDim[i] == -1) {
+            ret.push_back(rightDim[i]);
+        }
+        else if (rightDim[i] == -1) {
+            ret.push_back(leftDim[i]);
+        }
+        else {
+            std::cerr << "size of dim " << i << " of operand " << *leftOperand <<
+                " and " << *rightOperand << " differs\n";
+            exit(1);
+        }
+    }
+    return ret;
 }
 
 IndexRangeList::IndexRangeList() : std::vector<IndexRange *>() {}
 
-IndexRange::IndexRange(Node *lb, Node *ub) : lowerBound(lb), upperBound(ub) { }
+IndexRange::IndexRange(int lb, int ub) {
+    lowerBound = new Value<int>(lb);
+    upperBound = new Value<int>(ub);
+}
+
+IndexRange::IndexRange(Value<int> *lb, Value<int> *ub) :
+    lowerBound(lb), upperBound(ub) { }
 
 FunctionCall::FunctionCall(std::string *fName, Location loc) : Identifier(fName, loc) {
     arguments = NULL;
@@ -52,9 +84,10 @@ Equation::Equation(Expr *lhs, Expr *rhs) : leftHandSide(lhs), rightHandSide(rhs)
 BoundaryCondition::BoundaryCondition(Equation *cond, Equation *loc) :
     boundaryCondition(cond), location(loc) {}
 
-Declaration::Declaration(Node *lhs, Expr *rhs, Location loc) : leftHandSide(lhs), expr(rhs) {
-    this->loc = loc;
-}
+Declaration::Declaration(Node *lhs, Expr *rhs, Location loc) :
+    leftHandSide(lhs), expr(rhs) {
+        this->loc = loc;
+    }
 
 Node &Declaration::getLHS() {
     return *this->leftHandSide;

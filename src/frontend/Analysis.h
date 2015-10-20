@@ -25,6 +25,7 @@ class ProgramAnalysis {
         ProgramAnalysis(ir::Program &p) : prog(p) { }
         ~ProgramAnalysis();
         void buildSymTab();
+        void checkVars();
 };
 
 class ExprAnalysis {

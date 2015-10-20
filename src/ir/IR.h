@@ -1,6 +1,8 @@
 #ifndef IR_H
 #define IR_H
 
+#include "Printer.h"
+
 #include <vector>
 #include <string>
 #include <iostream>
@@ -23,12 +25,14 @@ class Node {
             return loc;
         }
         virtual std::ostream &dump(std::ostream &) = 0;
+        virtual std::ostream& dumpTree(std::ostream &) = 0;
 };
 
 class Expr : public Node {
     public:
         virtual bool isConst() = 0;
         virtual bool isVar() = 0;
+        virtual std::vector<int> getDim() = 0;
 };
 
 class Operator : public Node {
@@ -38,6 +42,9 @@ class Operator : public Node {
         Operator(std::string);
         std::string &getOp() { return op; };
         std::ostream &dump(std::ostream &os) {
+            return os << op;
+        }
+        std::ostream &dumpTree(std::ostream &os) {
             return os << op;
         }
 };
@@ -70,6 +77,20 @@ class BinaryExpr : public Expr {
             binaryOperator->dump(os);
             return rightOperand->dump(os) << ")";
         }
+        std::vector<int> getDim();
+        std::ostream& dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            binaryOperator->dump(os);
+            os << "\"]\n";
+
+            os << (long)this << " -> " << (long)leftOperand << "\n";
+            os << (long)this << " -> " << (long)rightOperand << "\n";
+
+            leftOperand->dumpTree(os);
+            rightOperand->dumpTree(os);
+
+            return os;
+        }
 };
 
 class UnaryExpr : public Expr {
@@ -85,14 +106,28 @@ class UnaryExpr : public Expr {
             unaryOperator->dump(os);
             return operand->dump(os);
         }
+        std::vector<int> getDim() {
+            return operand->getDim();
+        }
+        std::ostream& dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            unaryOperator->dump(os);
+            os << "\"]\n";
+
+            os << (long)this << " -> " << (long)operand << "\n";
+
+            operand->dumpTree(os);
+
+            return os;
+        }
 };
 
 class Identifier : public Expr {
     protected:
         std::string name;
     public:
-        Identifier(std::string *n, Location loc = Location("unde"));
-        Identifier(std::string n, Location loc = Location("unde"));
+        Identifier(std::string *n, Location loc = Location("undef"));
+        Identifier(std::string n, Location loc = Location("undef"));
         ~Identifier();
         std::string getName();
         bool isConst() { return false; }
@@ -100,30 +135,43 @@ class Identifier : public Expr {
         std::ostream &dump(std::ostream &os) {
             return os << name;
         }
-};
+        std::vector<int> getDim() {
+            std::vector<int> dim = std::vector<int>(1, -1);
+            return dim;
+        }
+        std::ostream& dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            os << name;
+            os << "\"]\n";
 
-class Value : public Expr {
-    public:
-        bool isConst() { return true; }
-        bool isVar() { return false; }
-        virtual std::ostream &dump(std::ostream &o) = 0;
-};
-
-class RealValue : public Value {
-    double value;
-    public:
-        RealValue(double);
-         std::ostream &dump(std::ostream &os) {
-            return os << std::to_string(value);
+            return os;
         }
 };
 
-class IntValue : public Value {
-    int value;
+template <typename T>
+class Value : public Expr {
+    T value;
     public:
-        IntValue(int);
+        Value(T val) {
+            value = val;
+        }
+        bool isConst() { return true; }
+        bool isVar() { return false; }
         std::ostream &dump(std::ostream &os) {
             return os << std::to_string(value);
+        }
+        T getVal() {
+            return value;
+        }
+        std::vector<int> getDim() {
+            return std::vector<int>(1, -1);
+        }
+        std::ostream& dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            os << value;
+            os << "\"]\n";
+
+            return os;
         }
 };
 
@@ -155,24 +203,55 @@ class FunctionCall : public Identifier {
             }
             return os << ")";
         }
+        std::vector<int> getDim() {
+            return std::vector<int>(1, -1);
+        }
+        std::ostream& dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            os << name;
+            os << "()\"]\n";
+
+            for (auto arg:*arguments) {
+                os << (long)this << " -> " << (long)arg << "\n";
+            }
+
+            for (auto arg:*arguments) {
+                arg->dumpTree(os);
+            }
+
+            return os << "\n";
+        }
 };
 
 class IndexRange : public Node {
     protected:
-        Node *lowerBound;
-        Node *upperBound;
+        Value<int> *lowerBound;
+        Value<int> *upperBound;
     public:
-        IndexRange(Node *lb, Node *ub);
-        Node &getLowerBound() { return *lowerBound; }
-        Node &getUpperBound() { return *lowerBound; }
+        IndexRange(Value<int> *lb, Value<int> *ub);
+        IndexRange(int lb, int ub);
+        Value<int> &getLowerBound() { return *lowerBound; }
+        Value<int> &getUpperBound() { return *lowerBound; }
         std::ostream &dump(std::ostream &os) {
             lowerBound->dump(os);
             os << ":";
             return upperBound->dump(os);
         }
+        int getDim() {
+            int dim = lowerBound->getVal()-upperBound->getVal()+1;
+            return dim;
+        }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\":\"]\n";
+            os << (long)this << " -> " << (long)lowerBound << "\n";
+            os << (long)this << " -> " << (long)upperBound << "\n";
+            lowerBound->dumpTree(os);
+            upperBound->dumpTree(os);
+            return os << "\n";
+        }
 };
 
-class IndexRangeList : public std::vector<IndexRange *>, public Node {
+class IndexRangeList : public std::vector<IndexRange *> {
     public:
         IndexRangeList();
         std::ostream &dump(std::ostream &os) {
@@ -184,12 +263,30 @@ class ArrayExpr : public Identifier {
     protected:
         IndexRangeList *indexRangeList;
     public:
-        ArrayExpr(std::string *aName, IndexRangeList *irl, Location loc = Location("undef"))
-            : Identifier(aName, loc) {
+        ArrayExpr(std::string *aName, IndexRangeList *irl,
+                Location loc = Location("undef")) : Identifier(aName, loc) {
             indexRangeList = irl;
         }
         bool isConst() { return false; }
         bool isVar() { return false; };
+        std::vector<int> getDim() {
+            std::vector<int> ret = std::vector<int>();
+            for (auto idx:*indexRangeList) {
+                ret.push_back(idx->getDim());
+            }
+            return ret;
+        }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\"";
+            os << name << "[]\"]\n";
+            for (auto ir:*indexRangeList) {
+                os << (long)this << " -> " << (long)ir << "\n";
+            }
+            for (auto ir:*indexRangeList) {
+                ir->dumpTree(os);
+            }
+            return os << "\n";
+        }
 };
 
 class Equation : public Node {
@@ -209,6 +306,14 @@ class Equation : public Node {
             os << " = ";
             return rightHandSide->dump(os);
         }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\" = \"]\n";
+            os << (long)this << " -> " << (long)leftHandSide << "\n";
+            os << (long)this << " -> " << (long)rightHandSide << "\n";
+            leftHandSide->dumpTree(os);
+            rightHandSide->dumpTree(os);
+            return os << "\n";
+        }
 };
 
 class BoundaryCondition : public Node {
@@ -218,7 +323,20 @@ class BoundaryCondition : public Node {
     public:
         BoundaryCondition(Equation *cond, Equation *loc);
         std::ostream &dump(std::ostream &os) {
-            return os << "BC";
+            os << "BC:\n";
+            os << "    ";
+            this->boundaryCondition->dump(os);
+            os  << " at ";
+            this->location->dump(os);
+            return os << "\n";
+        }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\" BC \"]\n";
+            os << (long)this << " -> " << (long)boundaryCondition << " [label=\"expr\"]\n";
+            os << (long)this << " -> " << (long)location << " [label=\"at\"]\n";
+            boundaryCondition->dumpTree(os);
+            location->dumpTree(os);
+            return os;
         }
 };
 
@@ -235,9 +353,17 @@ class Declaration : public Node {
             os << " := ";
             return expr->dump(os);
         }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << (long)this << " [label=\" := \"]\n";
+            os << (long)this << " -> " << (long)leftHandSide << "\n";
+            os << (long)this << " -> " << (long)expr << "\n";
+            leftHandSide->dumpTree(os);
+            expr->dumpTree(os);
+            return os << "\n";
+        }
 };
 
-class DeclarationList : public std::vector<Declaration *>, public Node {
+class DeclarationList : public std::vector<Declaration *> {
     public:
         DeclarationList();
         std::ostream &dump(std::ostream &os) {
@@ -245,7 +371,7 @@ class DeclarationList : public std::vector<Declaration *>, public Node {
         }
 };
 
-class EquationList : public std::vector<Equation *>, public Node {
+class EquationList : public std::vector<Equation *> {
     public:
         EquationList();
         std::ostream &dump(std::ostream &os) {
@@ -253,7 +379,7 @@ class EquationList : public std::vector<Equation *>, public Node {
         }
 };
 
-class BoundaryConditionList : public std::vector<BoundaryCondition *>, public Node {
+class BoundaryConditionList : public std::vector<BoundaryCondition *> {
     public:
         BoundaryConditionList();
         std::ostream &dump(std::ostream &os) {
@@ -261,7 +387,7 @@ class BoundaryConditionList : public std::vector<BoundaryCondition *>, public No
         }
 };
 
-class Program : public Node{
+class Program : public Node {
 
     protected:
         DeclarationList *decls;
@@ -305,6 +431,35 @@ class Program : public Node{
             }
             return os;
         }
+        std::ostream &dumpTree(std::ostream &os) {
+            os << "digraph ir {\n";
+            os << "node [shape = circle]\n";
+            os << (long)this << " [label=\"root\"]\n";
+
+            for (auto decl:*decls) {
+                os << (long)this << " -> " << (long)decl << "\n";
+            }
+            for (auto decl:*decls) {
+                decl->dumpTree(os);
+            }
+
+            for (auto eq:*eqs) {
+                os << (long)this << " -> " << (long)eq << "\n";
+            }
+            for (auto eq:*eqs) {
+                eq->dumpTree(os);
+            }
+
+
+            for (auto bc:*bcs) {
+                os << (long)this << " -> " << (long)bc << "\n";
+            }
+            for (auto bc:*bcs) {
+                bc->dumpTree(os);
+            }
+
+            return os << "}\n";
+        }
 };
 
 class Symbol {
@@ -313,10 +468,12 @@ class Symbol {
         Expr *def;
         bool internal;
         bool defined;
+        std::vector<int> dim;
     public:
         Symbol(std::string n, Expr *def = NULL, bool internal = false) : name(n) {
             this->def = def;
             this->internal = internal;
+            this->dim = std::vector<int>(1, -1);
         }
         std::string getName() {
             return name;
@@ -328,6 +485,12 @@ class Symbol {
         bool operator>(Symbol &s);
         bool operator<(Symbol &s);
         virtual std::ostream &dump(std::ostream &) = 0;
+        void setDim(std::vector<int> dim) {
+            this->dim = dim;
+        }
+        std::vector<int> getDim() {
+            return this->dim;
+        }
 };
 
 class Param : public Symbol {

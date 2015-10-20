@@ -5,11 +5,16 @@
 
 #include <functional>
 #include <cassert>
+#include <fstream>
 
 EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
     ProgramAnalysis pa(p);
 
-    std::cout << "IR:\n" << p;
+    std::ofstream file;
+    file.open("IR.dot");
+    prog.dumpTree(file);
+    file.close();
+
 
     SymTab &symTab = prog.getSymTab();
 
@@ -28,6 +33,8 @@ EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
     
     pa.buildSymTab();
 
+    pa.checkVars();
+
     symTab.print();
 }
 
@@ -45,8 +52,9 @@ void EsterBackEnd::emitCode(std::ostream &os) {
             os << p->getType() << " ";
             os << p->getName();
         }
+        // variables are either not defined, or non local equation
         else if (ir::Variable *v = dynamic_cast<ir::Variable *>(s)) {
-            if (!s->getDef()) {
+            if (!s->getDef() || s->getDim() != std::vector<int>(1, -1)) {
                 if (n > 0)
                     os << ", ";
                 n++;
@@ -94,6 +102,8 @@ void EsterBackEnd::emitEquations(std::ostream &os) {
         n++;
     }
 
+    os << "    // TODO: set RHS!\n";
+
     os << "\n";
     os << "    //===== end equations =====\n";
     os << "\n";
@@ -121,10 +131,19 @@ void EsterBackEnd::emitDecls(std::ostream &os) {
                         func->getName().c_str());
             }
             else {
+                int n = 0;
                 assert(dynamic_cast<ir::Array *>(sym) ||
                         dynamic_cast<ir::Variable *>(sym) ||
                         "Symbol should not be instantiated");
-                os << "    sym " << sym->getName() << " = S.regVar(\"" << sym->getName() << "\");\n";
+                os << "    // " << sym->getName() << " dimension: ";
+                for (auto s: sym->getDim()) {
+                    if (n++ > 0)
+                        os << ", ";
+                    os << s;
+                }
+                os << "\n";
+                os << "    sym " << sym->getName() <<
+                    " = S.regVar(\"" << sym->getName() << "\");\n";
             }
         }
         else {
@@ -153,3 +172,9 @@ void EsterBackEnd::emitDecls(std::ostream &os) {
     //     delete da;
     // }
 }
+
+
+void EsterBackEnd::emitBC(std::ostream &os, ir::BoundaryCondition *bc) {
+
+}
+

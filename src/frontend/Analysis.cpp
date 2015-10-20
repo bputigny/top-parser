@@ -70,7 +70,9 @@ void ProgramAnalysis::buildSymTab() {
         else if (ir::UnaryExpr *ue = dynamic_cast<ir::UnaryExpr *>(&e)) {
             parseExpr(ue->getOp());
         }
-        else if (ir::Value *val = dynamic_cast<ir::Value *>(&e)) {
+        else if (dynamic_cast<ir::Value<int> *>(&e)) {
+        }
+        else if (dynamic_cast<ir::Value<float> *>(&e)) {
         }
         else {
             std::cerr << e;
@@ -84,7 +86,6 @@ void ProgramAnalysis::buildSymTab() {
         parseExpr(e);
     }
 }
-
 
 std::list<ir::Variable> *ExprAnalysis::getVariables(ir::Expr &expr) {
 
@@ -163,3 +164,13 @@ std::list<ir::Variable> *ExprAnalysis::getVariables(ir::Expr &expr) {
 
     return list;
 }
+
+void ProgramAnalysis::checkVars() {
+    for (auto s:prog.getSymTab()) {
+        if (s->getDef()) {
+            std::vector<int> dim = s->getDef()->getDim();
+            s->setDim(dim);
+        }
+    }
+}
+

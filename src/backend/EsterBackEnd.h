@@ -10,6 +10,7 @@ class EsterBackEnd : public BackEnd {
         void emitDecls(std::ostream &os);
         void emitEquations(std::ostream &os);
         void emitExpr(std::ostream &os, ir::Expr *e);
+        void emitBC(std::ostream &os, ir::BoundaryCondition *bc);
     public:
         EsterBackEnd(ir::Program &p);
         void emitCode(std::ostream &os);
