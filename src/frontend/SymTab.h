@@ -9,7 +9,7 @@
 ///
 /// Symbol table
 //
-class SymTab : public std::list<ir::Symbol *> {
+class SymTab : public std::list<ir::Symbol *>, DOT {
     public:
         SymTab() { }
         void push_back(ir::Symbol *s) {
@@ -22,7 +22,7 @@ class SymTab : public std::list<ir::Symbol *> {
                 error("'%s' already defined\n", s->getName().c_str());
         }
         ir::Symbol *search(const std::string &id);
-        void print();
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
 #endif // SYMTAB_H

@@ -12,20 +12,20 @@ EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
 
     std::ofstream file;
     file.open("IR.dot");
-    prog.dumpTree(file);
+    prog.dumpDOT(file);
     file.close();
 
 
     SymTab &symTab = prog.getSymTab();
 
     // Add Ester internals
-    symTab.add(new ir::Function("lap"));
-    symTab.add(new ir::Function("zeros"));
-    symTab.add(new ir::Function("ones"));
-    symTab.add(new ir::Function("diff"));
-    symTab.add(new ir::Function("sin"));
-    symTab.add(new ir::Function("cos"));
-    symTab.add(new ir::Function("pow"));
+    symTab.add(new ir::Function("lap", true));
+    symTab.add(new ir::Function("zeros", true));
+    symTab.add(new ir::Function("ones", true));
+    symTab.add(new ir::Function("diff", true));
+    symTab.add(new ir::Function("sin", true));
+    symTab.add(new ir::Function("cos", true));
+    symTab.add(new ir::Function("pow", true));
 
     // We need to provide a definition for internal variable
     symTab.add(new ir::Variable("r", new ir::Identifier("S.r"), true));
@@ -35,7 +35,9 @@ EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
 
     pa.checkVars();
 
-    symTab.print();
+    file.open("SymTab.dot");
+    prog.getSymTab().dumpDOT(file);
+    file.close();
 }
 
 void EsterBackEnd::emitCode(std::ostream &os) {

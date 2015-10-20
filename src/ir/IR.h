@@ -9,6 +9,14 @@
 
 class SymTab;
 
+///
+/// Interface for classes to print their representation as dot graph
+///
+class DOT {
+    public :
+        virtual std::ostream& dumpDOT(std::ostream&) = 0;
+};
+
 namespace ir {
 
 class Location : public std::string {
@@ -17,7 +25,7 @@ class Location : public std::string {
         Location(std::string loc) : std::string(loc) { }
 };
 
-class Node {
+class Node : public DOT {
     protected:
         Location loc;
     public:
@@ -25,7 +33,6 @@ class Node {
             return loc;
         }
         virtual std::ostream &dump(std::ostream &) = 0;
-        virtual std::ostream& dumpTree(std::ostream &) = 0;
 };
 
 class Expr : public Node {
@@ -44,7 +51,7 @@ class Operator : public Node {
         std::ostream &dump(std::ostream &os) {
             return os << op;
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             return os << op;
         }
 };
@@ -78,7 +85,7 @@ class BinaryExpr : public Expr {
             return rightOperand->dump(os) << ")";
         }
         std::vector<int> getDim();
-        std::ostream& dumpTree(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             binaryOperator->dump(os);
             os << "\"]\n";
@@ -86,8 +93,8 @@ class BinaryExpr : public Expr {
             os << (long)this << " -> " << (long)leftOperand << "\n";
             os << (long)this << " -> " << (long)rightOperand << "\n";
 
-            leftOperand->dumpTree(os);
-            rightOperand->dumpTree(os);
+            leftOperand->dumpDOT(os);
+            rightOperand->dumpDOT(os);
 
             return os;
         }
@@ -109,14 +116,14 @@ class UnaryExpr : public Expr {
         std::vector<int> getDim() {
             return operand->getDim();
         }
-        std::ostream& dumpTree(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             unaryOperator->dump(os);
             os << "\"]\n";
 
             os << (long)this << " -> " << (long)operand << "\n";
 
-            operand->dumpTree(os);
+            operand->dumpDOT(os);
 
             return os;
         }
@@ -139,7 +146,7 @@ class Identifier : public Expr {
             std::vector<int> dim = std::vector<int>(1, -1);
             return dim;
         }
-        std::ostream& dumpTree(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             os << name;
             os << "\"]\n";
@@ -166,7 +173,7 @@ class Value : public Expr {
         std::vector<int> getDim() {
             return std::vector<int>(1, -1);
         }
-        std::ostream& dumpTree(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             os << value;
             os << "\"]\n";
@@ -206,7 +213,7 @@ class FunctionCall : public Identifier {
         std::vector<int> getDim() {
             return std::vector<int>(1, -1);
         }
-        std::ostream& dumpTree(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             os << name;
             os << "()\"]\n";
@@ -216,7 +223,7 @@ class FunctionCall : public Identifier {
             }
 
             for (auto arg:*arguments) {
-                arg->dumpTree(os);
+                arg->dumpDOT(os);
             }
 
             return os << "\n";
@@ -241,12 +248,12 @@ class IndexRange : public Node {
             int dim = lowerBound->getVal()-upperBound->getVal()+1;
             return dim;
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\":\"]\n";
             os << (long)this << " -> " << (long)lowerBound << "\n";
             os << (long)this << " -> " << (long)upperBound << "\n";
-            lowerBound->dumpTree(os);
-            upperBound->dumpTree(os);
+            lowerBound->dumpDOT(os);
+            upperBound->dumpDOT(os);
             return os << "\n";
         }
 };
@@ -276,14 +283,14 @@ class ArrayExpr : public Identifier {
             }
             return ret;
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\"";
             os << name << "[]\"]\n";
             for (auto ir:*indexRangeList) {
                 os << (long)this << " -> " << (long)ir << "\n";
             }
             for (auto ir:*indexRangeList) {
-                ir->dumpTree(os);
+                ir->dumpDOT(os);
             }
             return os << "\n";
         }
@@ -306,12 +313,12 @@ class Equation : public Node {
             os << " = ";
             return rightHandSide->dump(os);
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\" = \"]\n";
             os << (long)this << " -> " << (long)leftHandSide << "\n";
             os << (long)this << " -> " << (long)rightHandSide << "\n";
-            leftHandSide->dumpTree(os);
-            rightHandSide->dumpTree(os);
+            leftHandSide->dumpDOT(os);
+            rightHandSide->dumpDOT(os);
             return os << "\n";
         }
 };
@@ -330,12 +337,12 @@ class BoundaryCondition : public Node {
             this->location->dump(os);
             return os << "\n";
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\" BC \"]\n";
             os << (long)this << " -> " << (long)boundaryCondition << " [label=\"expr\"]\n";
             os << (long)this << " -> " << (long)location << " [label=\"at\"]\n";
-            boundaryCondition->dumpTree(os);
-            location->dumpTree(os);
+            boundaryCondition->dumpDOT(os);
+            location->dumpDOT(os);
             return os;
         }
 };
@@ -353,12 +360,12 @@ class Declaration : public Node {
             os << " := ";
             return expr->dump(os);
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\" := \"]\n";
             os << (long)this << " -> " << (long)leftHandSide << "\n";
             os << (long)this << " -> " << (long)expr << "\n";
-            leftHandSide->dumpTree(os);
-            expr->dumpTree(os);
+            leftHandSide->dumpDOT(os);
+            expr->dumpDOT(os);
             return os << "\n";
         }
 };
@@ -431,23 +438,23 @@ class Program : public Node {
             }
             return os;
         }
-        std::ostream &dumpTree(std::ostream &os) {
+        std::ostream &dumpDOT(std::ostream &os) {
             os << "digraph ir {\n";
-            os << "node [shape = circle]\n";
+            os << "node [shape = Mrecord]\n";
             os << (long)this << " [label=\"root\"]\n";
 
             for (auto decl:*decls) {
                 os << (long)this << " -> " << (long)decl << "\n";
             }
             for (auto decl:*decls) {
-                decl->dumpTree(os);
+                decl->dumpDOT(os);
             }
 
             for (auto eq:*eqs) {
                 os << (long)this << " -> " << (long)eq << "\n";
             }
             for (auto eq:*eqs) {
-                eq->dumpTree(os);
+                eq->dumpDOT(os);
             }
 
 
@@ -455,14 +462,14 @@ class Program : public Node {
                 os << (long)this << " -> " << (long)bc << "\n";
             }
             for (auto bc:*bcs) {
-                bc->dumpTree(os);
+                bc->dumpDOT(os);
             }
 
             return os << "}\n";
         }
 };
 
-class Symbol {
+class Symbol : public DOT {
     protected:
         std::string name;
         Expr *def;
@@ -491,6 +498,21 @@ class Symbol {
         std::vector<int> getDim() {
             return this->dim;
         }
+        std::ostream& dumpDOT(std::ostream& os) {
+            if (internal)
+                os << " | internal ";
+            else
+                os << " | user ";
+            if (defined)
+                os << " | defined ";
+            else
+                os << " | undef ";
+            os << " | ";
+            if (getDef())
+                os << " <" << (long)this << "> ";
+            os << name;
+            return os << "}\n";
+        }
 };
 
 class Param : public Symbol {
@@ -506,6 +528,10 @@ class Param : public Symbol {
         std::ostream &dump(std::ostream &os) {
             return os << name;
         }
+        std::ostream& dumpDOT(std::ostream& os) {
+            os << "{ param " << type;
+            return Symbol::dumpDOT(os);
+        }
 };
 
 class Variable : public Symbol {
@@ -515,19 +541,44 @@ class Variable : public Symbol {
         std::ostream &dump(std::ostream &os) {
             return os << name;
         }
+        std::ostream& dumpDOT(std::ostream& os) {
+            int n = 0;
+            os << "{ var size: ";
+            std::vector<int> dim = getDim();
+            if (dim == std::vector<int>(1, -1)) {
+                os << " full ";
+            }
+            else {
+                for (auto s:getDim()) {
+                    if (n++ > 0)
+                        os << "x";
+                    os << s;
+                }
+            }
+            return Symbol::dumpDOT(os);
+        }
 };
 
 class Array : public Variable {
     public:
         Array(std::string n, Expr *def = NULL, bool internal = false) :
             Variable(n, def, internal) { }
+        std::ostream& dumpDOT(std::ostream& os) {
+            os << "{ array ";
+            return Symbol::dumpDOT(os);
+        }
 };
 
 class Function : public Symbol {
     public:
-        Function(std::string n) : Symbol(n, NULL, true) { }
+        Function(std::string n, bool internal = false) :
+            Symbol(n, NULL, internal) { }
         std::ostream &dump(std::ostream &os) {
             return os << name << "()";
+        }
+        std::ostream& dumpDOT(std::ostream& os) {
+            os << "{ func ";
+            return Symbol::dumpDOT(os);
         }
 };
 

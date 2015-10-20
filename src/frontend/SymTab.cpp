@@ -13,25 +13,26 @@ ir::Symbol *SymTab::search(const std::string &id) {
     return NULL;
 }
 
-void SymTab::print() {
-    std::cout << "-=SymTab=-\n";
+std::ostream& SymTab::dumpDOT(std::ostream& os) {
+    int n = 0;
+    os << "digraph SymTab {\n";
+    os << "node [shape=Mrecord]\n";
+
+    os << (long)this << " [label=\"";
     for (auto s:*this) {
-        if (dynamic_cast<ir::Function *>(s)) {
-            std::cout << "(Function):\t";
-        }
-        else if (dynamic_cast<ir::Array *>(s)) {
-            std::cout << "(Array):\t";
-        }
-        else if (dynamic_cast<ir::Variable *>(s)) {
-            std::cout << "(Variable):\t";
-        }
-        else if (ir::Param *p = dynamic_cast<ir::Param *>(s)) {
-            std::cout << "(input " << p->getType().c_str() << "):\t";
-        }
-        else {
-            std::cout << "(Unknown):\t";
-        }
-        std::cout << " " << s->getName() << "\n";
+        if (n++ > 0)
+            os << " | ";
+        s->dumpDOT(os);
     }
-    std::cout << "-========-\n";
+    os << "\"]\n";
+
+    for (auto s:*this) {
+        if (s->getDef()) {
+            os << (long)this << ":" << (long)s << " -> " << (long)s->getDef() << "\n";
+            s->getDef()->dumpDOT(os);
+        }
+    }
+
+    return os << "}\n";
 }
+
