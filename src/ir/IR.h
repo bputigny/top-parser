@@ -180,6 +180,9 @@ class Value : public Expr {
 
             return os;
         }
+        bool operator==(Value<T>& v) {
+            return this->value == v.value;
+        }
 };
 
 class ArgumentList : public std::vector<Expr *> {
@@ -250,10 +253,16 @@ class IndexRange : public Node {
         }
         std::ostream &dumpDOT(std::ostream &os) {
             os << (long)this << " [label=\":\"]\n";
-            os << (long)this << " -> " << (long)lowerBound << "\n";
-            os << (long)this << " -> " << (long)upperBound << "\n";
-            lowerBound->dumpDOT(os);
-            upperBound->dumpDOT(os);
+            if (*lowerBound == *upperBound) {
+                os << (long)this << " -> " << (long)lowerBound << "\n";
+                lowerBound->dumpDOT(os);
+            }
+            else {
+                os << (long)this << " -> " << (long)lowerBound << "\n";
+                os << (long)this << " -> " << (long)upperBound << "\n";
+                lowerBound->dumpDOT(os);
+                upperBound->dumpDOT(os);
+            }
             return os << "\n";
         }
 };
@@ -500,18 +509,20 @@ class Symbol : public DOT {
         }
         std::ostream& dumpDOT(std::ostream& os) {
             if (internal)
-                os << " | internal ";
+                os << " </td></tr><tr><td border=\"1\"> internal ";
             else
-                os << " | user ";
+                os << " </td></tr><tr><td border=\"1\"> user ";
             if (defined)
-                os << " | defined ";
+                os << " </td></tr><tr><td border=\"1\"> defined ";
             else
-                os << " | undef ";
-            os << " | ";
+                os << " </td></tr><tr><td border=\"1\"> undef ";
+            os << " </td></tr><tr><td border=\"1\"";
             if (getDef())
-                os << " <" << (long)this << "> ";
-            os << name;
-            return os << "}\n";
+                os << " port=\"" << (long)this << "\">";
+            else
+                os << ">";
+            os << "<b>" << name << "</b>";
+            return os << "</td></tr>\n";
         }
 };
 
@@ -529,7 +540,7 @@ class Param : public Symbol {
             return os << name;
         }
         std::ostream& dumpDOT(std::ostream& os) {
-            os << "{ param " << type;
+            os << "<tr><td border=\"1\"> param " << type;
             return Symbol::dumpDOT(os);
         }
 };
@@ -543,7 +554,7 @@ class Variable : public Symbol {
         }
         std::ostream& dumpDOT(std::ostream& os) {
             int n = 0;
-            os << "{ var size: ";
+            os << "<tr><td border=\"1\"> var size: ";
             std::vector<int> dim = getDim();
             if (dim == std::vector<int>(1, -1)) {
                 os << " full ";
@@ -564,7 +575,7 @@ class Array : public Variable {
         Array(std::string n, Expr *def = NULL, bool internal = false) :
             Variable(n, def, internal) { }
         std::ostream& dumpDOT(std::ostream& os) {
-            os << "{ array ";
+            os << "<tr><td border=\"1\"> array ";
             return Symbol::dumpDOT(os);
         }
 };
@@ -577,7 +588,7 @@ class Function : public Symbol {
             return os << name << "()";
         }
         std::ostream& dumpDOT(std::ostream& os) {
-            os << "{ func ";
+            os << "<tr><td border=\"1\"> func ";
             return Symbol::dumpDOT(os);
         }
 };
