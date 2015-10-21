@@ -1,6 +1,7 @@
 #ifndef PRINTER_H
 #define PRINTER_H
 
+#include "config.h"
 #include <string>
 #include <cstdlib>
 #include <cstdio>

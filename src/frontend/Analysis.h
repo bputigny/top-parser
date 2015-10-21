@@ -1,6 +1,7 @@
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
+#include "config.h"
 #include "IR.h"
 #include "SymTab.h"
 
@@ -25,7 +26,7 @@ class ProgramAnalysis {
         ProgramAnalysis(ir::Program &p) : prog(p) { }
         ~ProgramAnalysis();
         void buildSymTab();
-        void checkVars();
+        void computeVarSize();
 };
 
 class ExprAnalysis {

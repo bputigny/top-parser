@@ -1,10 +1,13 @@
 #ifndef IR_H
 #define IR_H
 
+#include "config.h"
 #include "Printer.h"
 
+#include <list>
 #include <vector>
 #include <string>
+#include <typeinfo>
 #include <iostream>
 
 class SymTab;
@@ -32,7 +35,30 @@ class Node : public DOT {
         std::string getLocation() {
             return loc;
         }
-        virtual std::ostream &dump(std::ostream &) = 0;
+        virtual std::ostream& dump(std::ostream&) = 0;
+        virtual std::list<Node *> getChildren() = 0;
+        std::list<Node *> getLeafs() {
+            std::list<Node *> children = getChildren();
+            std::list<Node *> leafs = std::list<Node *>();
+            if (children.empty()) {
+                return std::list<Node *>(1, this);
+            }
+            for (auto c:children) {
+                std::list<Node *> childLeafs = c->getLeafs();
+                for (auto l:childLeafs) {
+                    leafs.push_back(l);
+                }
+            }
+            return leafs;
+        }
+        std::list<Node *> getLeafs(std::type_info& t) {
+            std::list<Node *> leafs = getLeafs();
+            std::list<Node *> selectedLeafs = std::list<Node *>();
+            for (auto l:leafs)
+                if (typeid(*l) == t)
+                    selectedLeafs.push_back(l);
+            return selectedLeafs;
+        }
 };
 
 class Expr : public Node {
@@ -40,6 +66,7 @@ class Expr : public Node {
         virtual bool isConst() = 0;
         virtual bool isVar() = 0;
         virtual std::vector<int> getDim() = 0;
+        virtual std::list<Node *> getChildren() = 0;
 };
 
 class Operator : public Node {
@@ -47,11 +74,12 @@ class Operator : public Node {
         std::string op;
     public:
         Operator(std::string);
-        std::string &getOp() { return op; };
-        std::ostream &dump(std::ostream &os) {
+        std::string& getOp() { return op; };
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os) {
             return os << op;
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             return os << op;
         }
 };
@@ -75,29 +103,13 @@ class BinaryExpr : public Expr {
         BinaryExpr(Expr *lOp, BinaryOperator *op, Expr *rOp, Location loc=Location("undef"));
         bool isConst();
         bool isVar();
-        Expr &getRightOp() { return *this->rightOperand; }
-        Expr &getLeftOp() { return *this->leftOperand; }
-        BinaryOperator &getOp() { return *this->binaryOperator; }
-        std::ostream &dump(std::ostream &os) {
-            os << "(";
-            leftOperand->dump(os);
-            binaryOperator->dump(os);
-            return rightOperand->dump(os) << ")";
-        }
+        Expr& getRightOp();
+        Expr& getLeftOp();
+        BinaryOperator& getOp();
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os);
         std::vector<int> getDim();
-        std::ostream& dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            binaryOperator->dump(os);
-            os << "\"]\n";
-
-            os << (long)this << " -> " << (long)leftOperand << "\n";
-            os << (long)this << " -> " << (long)rightOperand << "\n";
-
-            leftOperand->dumpDOT(os);
-            rightOperand->dumpDOT(os);
-
-            return os;
-        }
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
 class UnaryExpr : public Expr {
@@ -106,27 +118,13 @@ class UnaryExpr : public Expr {
         UnaryOperator *unaryOperator;
     public:
         UnaryExpr(Expr *operand, UnaryOperator *op, Location loc = Location("undef"));
-        bool isConst() { return operand->isConst(); }
-        bool isVar() { return operand->isVar(); }
-        Expr &getOp() { return *operand; }
-        std::ostream &dump(std::ostream &os) {
-            unaryOperator->dump(os);
-            return operand->dump(os);
-        }
-        std::vector<int> getDim() {
-            return operand->getDim();
-        }
-        std::ostream& dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            unaryOperator->dump(os);
-            os << "\"]\n";
-
-            os << (long)this << " -> " << (long)operand << "\n";
-
-            operand->dumpDOT(os);
-
-            return os;
-        }
+        bool isConst();
+        bool isVar();
+        Expr& getOp();
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os);
+        std::vector<int> getDim();
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
 class Identifier : public Expr {
@@ -137,52 +135,50 @@ class Identifier : public Expr {
         Identifier(std::string n, Location loc = Location("undef"));
         ~Identifier();
         std::string getName();
-        bool isConst() { return false; }
-        bool isVar() { return true; }
-        std::ostream &dump(std::ostream &os) {
-            return os << name;
-        }
-        std::vector<int> getDim() {
-            std::vector<int> dim = std::vector<int>(1, -1);
-            return dim;
-        }
-        std::ostream& dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            os << name;
-            os << "\"]\n";
-
-            return os;
-        }
+        bool isConst();
+        bool isVar();
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os);
+        std::vector<int> getDim();
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
-template <typename T>
+template <class T>
 class Value : public Expr {
     T value;
     public:
-        Value(T val) {
-            value = val;
-        }
-        bool isConst() { return true; }
-        bool isVar() { return false; }
-        std::ostream &dump(std::ostream &os) {
-            return os << std::to_string(value);
-        }
-        T getVal() {
-            return value;
-        }
-        std::vector<int> getDim() {
-            return std::vector<int>(1, -1);
-        }
-        std::ostream& dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            os << value;
-            os << "\"]\n";
+    inline Value(T val) {
+        value = val;
+    }
+    inline bool isConst(){
+        return true;
+    }
+    inline bool isVar(){
+        return false;
+    }
+    inline std::list<Node *> getChildren() {
+        std::list<Node *> children;
+        return children;
+    }
+    inline std::ostream& dump(std::ostream& os){
+        return os << std::to_string(value);
+    }
+    inline T getVal(){
+        return value;
+    }
+    inline std::vector<int> getDim(){
+        return std::vector<int>(1, -1);
+    }
+    inline std::ostream& dumpDOT(std::ostream& os){
+        os << (long)this << " [label=\"";
+        os << value;
+        os << "\"]\n";
 
-            return os;
-        }
-        bool operator==(Value<T>& v) {
-            return this->value == v.value;
-        }
+        return os;
+    }
+    inline bool operator==(Value<T>& v){
+        return this->value == v.value;
+    }
 };
 
 class ArgumentList : public std::vector<Expr *> {
@@ -198,39 +194,13 @@ class FunctionCall : public Identifier {
     public:
         FunctionCall(std::string *, Location loc = Location("undef"));
         FunctionCall(std::string *, ArgumentList *, Location loc = Location("undef"));
-        ArgumentList &getArgs() { return *arguments; }
-        bool isConst() { return false; }
-        bool isVar() { return false; };
-        std::ostream &dump(std::ostream &os) {
-            os << name << "(";
-            if (arguments != NULL) {
-                int n = 0;
-                for (auto arg:*arguments) {
-                    if (n++ > 0)
-                        os << ", ";
-                    arg->dump(os);
-                }
-            }
-            return os << ")";
-        }
-        std::vector<int> getDim() {
-            return std::vector<int>(1, -1);
-        }
-        std::ostream& dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            os << name;
-            os << "()\"]\n";
-
-            for (auto arg:*arguments) {
-                os << (long)this << " -> " << (long)arg << "\n";
-            }
-
-            for (auto arg:*arguments) {
-                arg->dumpDOT(os);
-            }
-
-            return os << "\n";
-        }
+        ArgumentList& getArgs();
+        bool isConst();
+        bool isVar();;
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os);
+        std::vector<int> getDim();
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
 class IndexRange : public Node {
@@ -240,9 +210,10 @@ class IndexRange : public Node {
     public:
         IndexRange(Value<int> *lb, Value<int> *ub);
         IndexRange(int lb, int ub);
-        Value<int> &getLowerBound() { return *lowerBound; }
-        Value<int> &getUpperBound() { return *lowerBound; }
-        std::ostream &dump(std::ostream &os) {
+        Value<int>& getLowerBound() { return *lowerBound; }
+        Value<int>& getUpperBound() { return *lowerBound; }
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os) {
             lowerBound->dump(os);
             os << ":";
             return upperBound->dump(os);
@@ -251,7 +222,7 @@ class IndexRange : public Node {
             int dim = lowerBound->getVal()-upperBound->getVal()+1;
             return dim;
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             os << (long)this << " [label=\":\"]\n";
             if (*lowerBound == *upperBound) {
                 os << (long)this << " -> " << (long)lowerBound << "\n";
@@ -270,7 +241,7 @@ class IndexRange : public Node {
 class IndexRangeList : public std::vector<IndexRange *> {
     public:
         IndexRangeList();
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << "IndexRangeList";
         }
 };
@@ -280,29 +251,12 @@ class ArrayExpr : public Identifier {
         IndexRangeList *indexRangeList;
     public:
         ArrayExpr(std::string *aName, IndexRangeList *irl,
-                Location loc = Location("undef")) : Identifier(aName, loc) {
-            indexRangeList = irl;
-        }
-        bool isConst() { return false; }
-        bool isVar() { return false; };
-        std::vector<int> getDim() {
-            std::vector<int> ret = std::vector<int>();
-            for (auto idx:*indexRangeList) {
-                ret.push_back(idx->getDim());
-            }
-            return ret;
-        }
-        std::ostream &dumpDOT(std::ostream &os) {
-            os << (long)this << " [label=\"";
-            os << name << "[]\"]\n";
-            for (auto ir:*indexRangeList) {
-                os << (long)this << " -> " << (long)ir << "\n";
-            }
-            for (auto ir:*indexRangeList) {
-                ir->dumpDOT(os);
-            }
-            return os << "\n";
-        }
+                Location loc = Location("undef"));
+        bool isConst();
+        bool isVar();;
+        std::list<Node *> getChildren();
+        std::vector<int> getDim();
+        std::ostream& dumpDOT(std::ostream& os);
 };
 
 class Equation : public Node {
@@ -311,18 +265,19 @@ class Equation : public Node {
         Expr *rightHandSide;
     public:
         Equation(Expr *lhs, Expr *rhs);
-        Expr &getLHS() {
+        Expr& getLHS() {
             return *leftHandSide;
         }
-        Expr &getRHS() {
+        Expr& getRHS() {
             return *rightHandSide;
         }
-        std::ostream &dump(std::ostream &os) {
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os) {
             leftHandSide->dump(os);
             os << " = ";
             return rightHandSide->dump(os);
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             os << (long)this << " [label=\" = \"]\n";
             os << (long)this << " -> " << (long)leftHandSide << "\n";
             os << (long)this << " -> " << (long)rightHandSide << "\n";
@@ -338,7 +293,8 @@ class BoundaryCondition : public Node {
         Equation *location;
     public:
         BoundaryCondition(Equation *cond, Equation *loc);
-        std::ostream &dump(std::ostream &os) {
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os) {
             os << "BC:\n";
             os << "    ";
             this->boundaryCondition->dump(os);
@@ -346,7 +302,7 @@ class BoundaryCondition : public Node {
             this->location->dump(os);
             return os << "\n";
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             os << (long)this << " [label=\" BC \"]\n";
             os << (long)this << " -> " << (long)boundaryCondition << " [label=\"expr\"]\n";
             os << (long)this << " -> " << (long)location << " [label=\"at\"]\n";
@@ -362,14 +318,15 @@ class Declaration : public Node {
         Expr *expr;
     public:
         Declaration(Node *, Expr *, Location loc = std::string("undef"));
-        Node &getLHS();
-        Expr &getExpr();
-        std::ostream &dump(std::ostream &os) {
+        Node& getLHS();
+        Expr& getExpr();
+        std::list<Node *> getChildren();
+        std::ostream& dump(std::ostream& os) {
             leftHandSide->dump(os);
             os << " := ";
             return expr->dump(os);
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             os << (long)this << " [label=\" := \"]\n";
             os << (long)this << " -> " << (long)leftHandSide << "\n";
             os << (long)this << " -> " << (long)expr << "\n";
@@ -382,7 +339,7 @@ class Declaration : public Node {
 class DeclarationList : public std::vector<Declaration *> {
     public:
         DeclarationList();
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << "DeclList";
         }
 };
@@ -390,7 +347,7 @@ class DeclarationList : public std::vector<Declaration *> {
 class EquationList : public std::vector<Equation *> {
     public:
         EquationList();
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << "EquationList";
         }
 };
@@ -398,7 +355,7 @@ class EquationList : public std::vector<Equation *> {
 class BoundaryConditionList : public std::vector<BoundaryCondition *> {
     public:
         BoundaryConditionList();
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << "BCList";
         }
 };
@@ -413,19 +370,22 @@ class Program : public Node {
     public:
         Program(SymTab *params, DeclarationList *decls,
                 EquationList *eqs, BoundaryConditionList *bcs);
-        DeclarationList &getDeclarations() {
+        DeclarationList& getDeclarations() {
             return *decls;
         }
-        SymTab &getSymTab() {
+        SymTab& getSymTab() {
             return *symTab;
         }
-        EquationList &getEquations() {
+        EquationList& getEquations() {
             return *eqs;
         }
-        BoundaryConditionList &getBCs() {
+        BoundaryConditionList& getBCs() {
             return *bcs;
         }
-        std::ostream &dump(std::ostream &os) {
+        std::list<Node *> getChildren();
+        void buildSymTab();
+        void computeVarSize();
+        std::ostream& dump(std::ostream& os) {
             os << "Program:\n";
             os << " - Decls:\n";
             for (auto d:getDeclarations()) {
@@ -447,7 +407,7 @@ class Program : public Node {
             }
             return os;
         }
-        std::ostream &dumpDOT(std::ostream &os) {
+        std::ostream& dumpDOT(std::ostream& os) {
             os << "digraph ir {\n";
             os << "node [shape = Mrecord]\n";
             os << (long)this << " [label=\"root\"]\n";
@@ -497,10 +457,10 @@ class Symbol : public DOT {
         Expr *getDef() { return def; }
         bool isInternal() { return internal; }
         bool isDefined() { return defined; }
-        bool operator==(Symbol &s);
-        bool operator>(Symbol &s);
-        bool operator<(Symbol &s);
-        virtual std::ostream &dump(std::ostream &) = 0;
+        bool operator==(Symbol& s);
+        bool operator>(Symbol& s);
+        bool operator<(Symbol& s);
+        virtual std::ostream& dump(std::ostream&) = 0;
         void setDim(std::vector<int> dim) {
             this->dim = dim;
         }
@@ -536,7 +496,7 @@ class Param : public Symbol {
         std::string getType() {
             return type;
         }
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << name;
         }
         std::ostream& dumpDOT(std::ostream& os) {
@@ -549,7 +509,7 @@ class Variable : public Symbol {
     public:
         Variable(std::string n, Expr *def = NULL, bool internal = false) :
             Symbol(n, def, internal) { }
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << name;
         }
         std::ostream& dumpDOT(std::ostream& os) {
@@ -584,7 +544,7 @@ class Function : public Symbol {
     public:
         Function(std::string n, bool internal = false) :
             Symbol(n, NULL, internal) { }
-        std::ostream &dump(std::ostream &os) {
+        std::ostream& dump(std::ostream& os) {
             return os << name << "()";
         }
         std::ostream& dumpDOT(std::ostream& os) {
@@ -595,8 +555,8 @@ class Function : public Symbol {
 
 }
 
-std::ostream &operator<<(std::ostream &, ir::Symbol &);
-std::ostream &operator<<(std::ostream &, ir::Identifier &);
-std::ostream &operator<<(std::ostream &, ir::Node &);
+std::ostream& operator<<(std::ostream& , ir::Symbol&);
+std::ostream& operator<<(std::ostream& , ir::Identifier&);
+std::ostream& operator<<(std::ostream& , ir::Node&);
 
 #endif

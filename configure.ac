@@ -23,6 +23,10 @@ AC_PROG_LEX
 AC_PROG_YACC
 AC_PROG_LIBTOOL
 
+AC_CHECK_HEADER(cassert, [], [AC_ERROR(cassert not found)])
+AC_CHECK_HEADER(functional, [], [AC_ERROR(functional not found)])
+AC_CHECK_HEADER(typeinfo, [], [AC_ERROR(typeinfo not found)])
+
 save_flags=$CXXFLAGS
 CXXFLAGS+=" -std=c++11"
 

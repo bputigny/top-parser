@@ -1,6 +1,7 @@
 #ifndef BACKEND_H
 #define BACKEND_H
 
+#include "config.h"
 #include "IR.h"
 
 #include <iostream>

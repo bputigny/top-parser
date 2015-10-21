@@ -26,5 +26,5 @@ Download
 
 
 .. note::
-   You can find implementation details in the `doxygen <../../html/index.html>`_ documentation.
+   You can find implementation details in the `doxygen <../../html-doxygen/index.html>`_ documentation.
 

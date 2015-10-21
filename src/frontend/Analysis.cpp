@@ -165,7 +165,7 @@ std::list<ir::Variable> *ExprAnalysis::getVariables(ir::Expr &expr) {
     return list;
 }
 
-void ProgramAnalysis::checkVars() {
+void ProgramAnalysis::computeVarSize() {
     for (auto s:prog.getSymTab()) {
         if (s->getDef()) {
             std::vector<int> dim = s->getDef()->getDim();

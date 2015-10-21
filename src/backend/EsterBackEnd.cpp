@@ -7,16 +7,15 @@
 #include <cassert>
 #include <fstream>
 
-EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
-    ProgramAnalysis pa(p);
+EsterBackEnd::EsterBackEnd(ir::Program& p) : prog(p) {
 
-    std::ofstream file;
-    file.open("IR.dot");
-    prog.dumpDOT(file);
-    file.close();
+    // std::ofstream file;
+    // file.open("IR.dot");
+    // prog.dumpDOT(file);
+    // file.close();
 
 
-    SymTab &symTab = prog.getSymTab();
+    SymTab& symTab = prog.getSymTab();
 
     // Add Ester internals
     symTab.add(new ir::Function("lap", true));
@@ -31,16 +30,28 @@ EsterBackEnd::EsterBackEnd(ir::Program &p) : prog(p) {
     symTab.add(new ir::Variable("r", new ir::Identifier("S.r"), true));
     symTab.add(new ir::Variable("theta", new ir::Identifier("S.theta"), true));
     
-    pa.buildSymTab();
+    prog.buildSymTab();
+    prog.computeVarSize();
 
-    pa.checkVars();
+    nonLocEqToBC();
 
-    file.open("SymTab.dot");
-    prog.getSymTab().dumpDOT(file);
-    file.close();
+    // file.open("SymTab.dot");
+    // prog.getSymTab().dumpDOT(file);
+    // file.close();
 }
 
-void EsterBackEnd::emitCode(std::ostream &os) {
+void EsterBackEnd::nonLocEqToBC() {
+    for (auto v:prog.getSymTab()) {
+        if (v->getDim() != std::vector<int>(1, -1)) {
+            // ir::Equation *eq = ;
+            // ir::BoundaryCondition *bc = new ir::BoundaryCondition();
+            assert(s->getDef());
+            // prog.addBC(s->getDef());
+        }
+    }
+}
+
+void EsterBackEnd::emitCode(std::ostream& os) {
     int n = 0;
 
     os << "// Ester backend code\n";
@@ -81,7 +92,7 @@ void EsterBackEnd::emitCode(std::ostream &os) {
     os << "}\n";
 }
 
-void EsterBackEnd::emitEquations(std::ostream &os) {
+void EsterBackEnd::emitEquations(std::ostream& os) {
     int n = 0;
 
     os << "\n";
@@ -102,6 +113,7 @@ void EsterBackEnd::emitEquations(std::ostream &os) {
             os << "    eq" << n << ".add(&op, \"eq" << n << "\", \"" << v.getName() << "\");\n";
         }
         n++;
+        delete eq;
     }
 
     os << "    // TODO: set RHS!\n";
@@ -111,11 +123,11 @@ void EsterBackEnd::emitEquations(std::ostream &os) {
     os << "\n";
 }
 
-void EsterBackEnd::emitExpr(std::ostream &os, ir::Expr *e) {
+void EsterBackEnd::emitExpr(std::ostream& os, ir::Expr *e) {
     os << *e;
 }
 
-void EsterBackEnd::emitDecls(std::ostream &os) {
+void EsterBackEnd::emitDecls(std::ostream& os) {
 
     os << "\n";
     for (auto d:prog.getDeclarations()) {
@@ -176,7 +188,7 @@ void EsterBackEnd::emitDecls(std::ostream &os) {
 }
 
 
-void EsterBackEnd::emitBC(std::ostream &os, ir::BoundaryCondition *bc) {
+void EsterBackEnd::emitBC(std::ostream& os, ir::BoundaryCondition *bc) {
 
 }
 
