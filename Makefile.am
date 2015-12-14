@@ -1,7 +1,7 @@
-SUBDIRS = src
+SUBDIRS = utils ir frontend backend bin
 
 EXTRA_DIST = examples/poisson \
 			 examples/polytrope
 
-doc:
-	make html -C $(abs_srcdir)/documentation
+docs:
+	make html -C $(abs_srcdir)/doc

@@ -1,4 +1,10 @@
+#include "config.h"
 #include "IR.h"
+#include "parser.hpp"
+#include "Printer.h"
+#include "FrontEnd.h"
+#include "EsterBackEnd.h"
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -8,20 +14,12 @@ extern "C" {
 #include <unistd.h>
 }
 
-#include "parser.hpp"
-#include "IR.h"
-#include "Printer.h"
-#include "FrontEnd.h"
-#include "EsterBackEnd.h"
-#include "config.h"
 
 extern int yylineno;
 extern int yylex();
 extern int yyerror(const char *s);
 
 extern FILE *yyin;
-
-std::string *filename = NULL;
 
 void usage(char *bin) {
     fprintf(stderr, "Usage: %s <input> [-o <output] [-f]\n", bin);
@@ -54,7 +52,7 @@ int main (int argc, char* argv[]) {
             break;
         case 'o':
             if (!force && access(optarg, F_OK) != -1 ) {
-                error("File `%s' already exists\n", optarg);
+                err() << "File `" << optarg << "' already exists\n";
             }
             outFileName = new std::string(optarg);
             break;
@@ -65,7 +63,7 @@ int main (int argc, char* argv[]) {
             filename = new std::string(argv[optind + nfile]);
             yyin = fopen(filename->c_str(), "r");
             if (!yyin) {
-                error("cannot open input file `%s'\n", filename);
+                err() << "cannot open input file `" << filename << "'\n";
             }
             nfile++;
         }
@@ -77,7 +75,6 @@ int main (int argc, char* argv[]) {
 
     FrontEnd fe;
     ir::Program *p = fe.parse(*filename);
-    std::cout << "Syntax analysis OK\n";
     EsterBackEnd esterBackEnd(*p);
     if (outFileName) {
         std::ofstream ofs;

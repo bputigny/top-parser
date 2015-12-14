@@ -2,10 +2,8 @@
 
 namespace ir {
 
-BinaryExpr::BinaryExpr(Expr *lOp, BinaryOperator *op, Expr *rOp, Location loc) :
-    leftOperand(lOp), rightOperand(rOp), binaryOperator(op) {
-        this->loc = loc;
-}
+BinaryExpr::BinaryExpr(Expr *lOp, BinaryOperator op, Expr *rOp, Node *p) :
+    leftOperand(lOp), rightOperand(rOp), op(op), Expr(p) { }
 
 bool BinaryExpr::isConst() {
     return this->leftOperand->isConst() && this->rightOperand->isConst();
@@ -18,7 +16,6 @@ bool BinaryExpr::isVar() {
 std::list<Node *> BinaryExpr::getChildren() {
     std::list<Node *> children;
     children.push_back(leftOperand);
-    children.push_back(binaryOperator);
     children.push_back(rightOperand);
     return children;
 }
@@ -32,19 +29,19 @@ Expr& BinaryExpr::getLeftOp() {
 }
 
 BinaryOperator& BinaryExpr::getOp() {
-    return *this->binaryOperator;
+    return this->op;
 }
 
 std::ostream& BinaryExpr::dump(std::ostream& os) {
     os << "(";
     leftOperand->dump(os);
-    binaryOperator->dump(os);
+    os << op;
     return rightOperand->dump(os) << ")";
 }
 
 std::ostream& BinaryExpr::dumpDOT(std::ostream& os) {
     os << (long)this << " [label=\"";
-    binaryOperator->dump(os);
+    os << op;
     os << "\"]\n";
 
     os << (long)this << " -> " << (long)leftOperand << "\n";
@@ -99,12 +96,8 @@ bool UnaryExpr::isVar() {
     return operand->isVar();
 }
 
-Expr& UnaryExpr::getOp() {
-    return *operand;
-}
-
 std::ostream& UnaryExpr::dump(std::ostream& os) {
-    unaryOperator->dump(os);
+    os << op;
     return operand->dump(os);
 }
 
@@ -114,7 +107,7 @@ std::vector<int> UnaryExpr::getDim() {
 
 std::ostream& UnaryExpr::dumpDOT(std::ostream& os) {
     os << (long)this << " [label=\"";
-    unaryOperator->dump(os);
+    os << op;
     os << "\"]\n";
 
     os << (long)this << " -> " << (long)operand << "\n";
@@ -125,23 +118,32 @@ std::ostream& UnaryExpr::dumpDOT(std::ostream& os) {
 }
 
 std::list<Node *> UnaryExpr::getChildren() {
-    std::list<Node *> children;
-    children.push_back(unaryOperator);
-    children.push_back(operand);
-    return children;
+    return std::list<Node *>(1, operand);
 }
 
-UnaryExpr::UnaryExpr(Expr *operand, UnaryOperator *op, Location loc) {
+UnaryExpr::UnaryExpr(Expr *operand, UnaryOperator op, Node *p) : Expr(p), op(op) {
     this->operand = operand;
-    unaryOperator = op;
-    this->loc = loc;
 }
+
+Expr& UnaryExpr::getOp() {
+    return *this->operand;
+}
+
+Identifier::Identifier(std::string *n, Node *p) : name(*n), Expr(p) { }
+
+Identifier::Identifier(std::string n, Node *p) :  Identifier(&n, p) { }
+
+Identifier::~Identifier() { }
 
 bool Identifier::isConst() {
     return false;
 }
 
 bool Identifier::isVar() {
+    return true;
+}
+
+bool Identifier::isLeaf() {
     return true;
 }
 
@@ -167,22 +169,17 @@ std::list<Node *> Identifier::getChildren() {
     return children;
 }
 
-Identifier::Identifier(std::string *n, Location loc) : name(*n) {
-    this->loc = loc;
-}
-Identifier::Identifier(std::string n, Location loc) : name(n) {
-    this->loc = loc;
-}
-
 std::string Identifier::getName() {
     return name;
 }
 
-FunctionCall::FunctionCall(std::string *fName, Location loc) : Identifier(fName, loc) {
+FunctionCall::FunctionCall(std::string *fName, Node *p) :
+    Identifier(fName, p) {
     arguments = NULL;
 }
 
-FunctionCall::FunctionCall(std::string *fName, ArgumentList *args, Location loc) : Identifier(fName, loc) {
+FunctionCall::FunctionCall(std::string *fName, ArgumentList *args, Node *p) :
+    Identifier(fName, p) {
     arguments = args;
 }
 
@@ -239,8 +236,13 @@ std::ostream& FunctionCall::dumpDOT(std::ostream& os) {
     return os << "\n";
 }
 
-ArrayExpr::ArrayExpr(std::string *aName, IndexRangeList *irl, Location loc) :
-    Identifier(aName, loc) {
+ArrayExpr::ArrayExpr(std::string *aName, IndexRangeList *irl, Node *p) :
+    Identifier(aName, p) {
+    indexRangeList = irl;
+}
+
+ArrayExpr::ArrayExpr(std::string aName, IndexRangeList *irl, Node *p) :
+    Identifier(aName, p) {
     indexRangeList = irl;
 }
 
@@ -258,6 +260,17 @@ std::vector<int> ArrayExpr::getDim() {
         ret.push_back(idx->getDim());
     }
     return ret;
+}
+
+std::ostream& ArrayExpr::dump(std::ostream& os) {
+    int n = 0;
+    os << name << "[";
+    for (auto irl:*indexRangeList) {
+        if (n++ > 0)
+            os << ", ";
+    }
+    os << "]";
+    return os;
 }
 
 std::ostream& ArrayExpr::dumpDOT(std::ostream& os) {

@@ -51,11 +51,11 @@ AS_IF([test "x$cxx11" = "xno"],
       [AC_ERROR([$CXX does not supports C++11 standard])])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile
-                 src/ir/Makefile
-                 src/utils/Makefile
-                 src/backend/Makefile
-                 src/frontend/Makefile])
+                 ir/Makefile
+                 bin/Makefile
+                 utils/Makefile
+                 backend/Makefile
+                 frontend/Makefile])
 
 AC_ARG_ENABLE([debug],
              AS_HELP_STRING([--enable-debug],
