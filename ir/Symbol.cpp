@@ -15,6 +15,10 @@ Expr *Symbol::getDef() {
     return expr;
 }
 
+bool Symbol::isInternal() {
+    return internal;
+}
+
 Param::Param(std::string n, std::string t, Expr *def) : Symbol(n, def, internal) {
     type = t;
 }

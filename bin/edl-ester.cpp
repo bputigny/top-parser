@@ -22,7 +22,7 @@ extern int yyerror(const char *s);
 extern FILE *yyin;
 
 void usage(char *bin) {
-    fprintf(stderr, "Usage: %s <input> [-o <output] [-f]\n", bin);
+    fprintf(stderr, "Usage: %s <input> [-o <output] [-f] [-v level]\n", bin);
 }
 
 void help(char *bin) {
@@ -33,6 +33,8 @@ void help(char *bin) {
     fprintf(stderr, "  -f %*s force: override output file (if exists)\n",
             20, "");
     fprintf(stderr, "  -h %*s help: display this help\n", 20, "");
+    fprintf(stderr, "  -v level %*s set verbosity level ", 14, "");
+    fprintf(stderr, "\n");
 }
 
 int main (int argc, char* argv[]) {
@@ -41,7 +43,7 @@ int main (int argc, char* argv[]) {
     int nfile = 0;
     int force = 0;
 
-    while ((c = getopt(argc, argv, "o:fh")) != EOF) {
+    while ((c = getopt(argc, argv, "o:fhv:")) != EOF) {
         switch (c) {
         case 'h':
             help(argv[0]);
@@ -55,6 +57,9 @@ int main (int argc, char* argv[]) {
                 err() << "File `" << optarg << "' already exists\n";
             }
             outFileName = new std::string(optarg);
+            break;
+        case 'v':
+            Printer::init(atoi(optarg));
             break;
         }
     }
@@ -75,7 +80,7 @@ int main (int argc, char* argv[]) {
 
     FrontEnd fe;
     ir::Program *p = fe.parse(*filename);
-    EsterBackEnd esterBackEnd(*p);
+    EsterBackEnd esterBackEnd(p);
     if (outFileName) {
         std::ofstream ofs;
         ofs.open(*outFileName);

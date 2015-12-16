@@ -9,6 +9,7 @@
 
 namespace ir{
     class Symbol;
+    class Identifier;
 }
 
 ///
@@ -20,6 +21,7 @@ class SymTab : public std::list<ir::Symbol *>, public DOT {
         void push_back(ir::Symbol *s);
         void add(ir::Symbol *s);
         ir::Symbol *search(const std::string& id) const;
+        ir::Symbol *search(ir::Identifier *) const;
         void dumpDOT(std::ostream& os, bool root = true) const;
 };
 

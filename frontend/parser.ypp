@@ -195,6 +195,10 @@ index
                                                 new ir::Value<int>($1),
                                                 new ir::Value<int>($3));
                                    }
+| ':'                              { $$ = new ir::IndexRange(
+                                                new ir::Value<int>(0),
+                                                new ir::Value<int>(-1));
+                                   }
 ;
 
 const
@@ -213,7 +217,7 @@ bc
 %%
 
 int yyerror(const char *s) {
-    std::cerr <<  "Error at " << *filename << ":" << yylineno << ": "
+    err() <<  "Error at " << *filename << ":" << yylineno << ": "
               << s << "\n";
     exit(1);
 }

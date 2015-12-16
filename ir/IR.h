@@ -34,8 +34,11 @@ class Node : public DOT {
         std::string getSourceLocation();
         void setSourceLocation(std::string);
         ~Node();
+        void clear();
         void replace(Node *, Node *);
         static int getNodeNumber();
+        virtual Node *copy() = 0;
+        void setParents();
 };
 
 class Expr : public Node {
@@ -53,8 +56,11 @@ class Value : public Expr {
         inline T getValue() {
             return value;
         }
-        void dump(std::ostream &os) const {
+        inline void dump(std::ostream &os) const {
             os << "Val: " << value;
+        }
+        virtual inline Node *copy() {
+            return new Value<T>(value);
         }
 };
 
@@ -67,6 +73,7 @@ class BinExpr : public Expr {
         Expr *getRightOp() const;
         Expr *getLeftOp() const;
         virtual void dump(std::ostream&) const;
+        virtual Node *copy();
 };
 
 class UnaryExpr : public Expr {
@@ -78,6 +85,7 @@ class UnaryExpr : public Expr {
         Expr *getExpr() const;
         char getOp() const;
         virtual void dump(std::ostream&) const;
+        virtual Node *copy();
 };
 
 class ExprLst : public std::list<Expr *> {
@@ -91,6 +99,7 @@ class Identifier : public Expr {
         Identifier(std::string n, Node *parent = NULL);
         std::string getName();
         virtual void dump(std::ostream& os) const;
+        virtual Node *copy();
 };
 
 class FuncCall : public Identifier {
@@ -98,11 +107,14 @@ class FuncCall : public Identifier {
         FuncCall(std::string, ExprLst *args = NULL, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         ExprLst *getArgs();
+        virtual Node *copy();
 };
 
 class ArrayExpr : public Identifier {
     public:
         ArrayExpr(std::string name, ExprLst *indices, Node *p = NULL);
+        ExprLst *getIndices();
+        virtual Node *copy();
 };
 
 class Decl : public Node {
@@ -111,6 +123,7 @@ class Decl : public Node {
         Expr *getLHS();
         Expr *getDef();
         virtual void dump(std::ostream& os) const;
+        virtual Node *copy();
 };
 
 class DeclLst : public std::list<Decl *> {
@@ -122,6 +135,7 @@ class Equation : public Node {
         virtual void dump(std::ostream& os) const;
         Expr *getLHS();
         Expr *getRHS();
+        virtual Node *copy();
 };
 
 class EqLst : public std::list<Equation *> {
@@ -131,6 +145,7 @@ class BC : public Node {
     public:
         BC(Equation *cond, Equation *loc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
+        virtual Node *copy();
 };
 
 class BCLst : public std::list<BC *> {
@@ -149,11 +164,14 @@ class Program : public DOT {
         SymTab *getSymTab();
         EqLst *getEqs();
         BCLst *getBCs();
+        DeclLst *getDecls();
 };
 
 class IndexRange : public BinExpr {
     public:
         IndexRange(Expr *lb, Expr *ub, Node *p = NULL);
+        Expr *getLB();
+        Expr *getUB();
 };
 
 class IndexRangeLst : public std::list<IndexRange *> {
@@ -168,6 +186,7 @@ class Symbol {
         Symbol(std::string name, Expr *def = NULL, bool internal = false);
         virtual std::string& getName();
         Expr *getDef();
+        bool isInternal();
 };
 
 class Param : public Symbol {

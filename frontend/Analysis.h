@@ -8,13 +8,8 @@
 
 template<class T>
 class Analysis {
-    protected:
-        ir::Program *prog;
-
     public:
-        inline Analysis(ir::Program *prog) {
-            this->prog = prog;
-        }
+        inline Analysis() { }
 
         inline void run(std::function<void (T *)> check, ir::Node *root) {
             for (auto c:root->getChildren()) {

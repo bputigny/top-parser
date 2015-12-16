@@ -1,4 +1,4 @@
-SUBDIRS = utils ir frontend backend bin
+SUBDIRS = utils frontend ir backend bin
 
 EXTRA_DIST = examples/poisson \
 			 examples/polytrope

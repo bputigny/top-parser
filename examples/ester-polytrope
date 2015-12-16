@@ -1,20 +1,20 @@
 let
-    param int nr, nt
-    param int nex
-    param double omega
-    param double n
+  param int nr, nt
+  param int nex
+  param double omega
+  param double n
 
-    var phi, phi_ex
+  var phi, phi_ex
 
-    phi0 = phi[0, 0]
-    h = 1 - lambda * (phi - phi0) + .5 * pow(omega, 2) * pow(r*sin(theta), 2)
-    lambda = 1 / (phi[1, 1] - phi0)
+  phi0 = Tmean(phi[0, :])
+  # lambda1 = 1 / (phi[1, 1] - phi[0, 0]) # this one should break (2 /= array expr)
+  lambda = 1 / (Tpole(phi[1, :]) - phi0)
+  h = 1 - lambda * (phi - phi0) + .5 * pow(omega, 2) * pow(r*sin(theta), 2)
 
 in
-    lap(phi) = pow(sqrt(h * h), n)
-    lap(phi_ex) = 0
+  lap(phi) = pow(sqrt(h * h), n)
+  lap(phi_ex) = 0
 
 with
-    diff(phi, r) = 0    at r = 0
-    phi = phi_ex        at r = 1
-
+  diff(phi, r) = 0    at r = 0
+  phi = phi_ex        at r = 1

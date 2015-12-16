@@ -9,6 +9,8 @@
 class DOT {
     public :
         virtual void dumpDOT(std::ostream&, bool) const = 0;
+        static void display(const std::string& file);
+        void display();
 };
 
 

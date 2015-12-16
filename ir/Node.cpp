@@ -30,6 +30,13 @@ void Node::dump(std::ostream& os) const {
     os << "Node " << (this);
 }
 
+void Node::setParents() {
+    for (auto c: children) {
+        c->setParents();
+        c->parent = this;
+    }
+}
+
 void Node::dumpDOT(std::ostream& os, bool root) const {
     if (root) {
         os << "digraph ir {\n";
@@ -63,10 +70,15 @@ std::string Node::getSourceLocation() {
     return srcLoc;
 }
 
-Node::~Node() {
-    for(auto child: children) {
-        delete(child);
+void Node::clear() {
+    for(auto c: children) {
+        c->clear();
+        delete(c);
     }
+    children.clear();
+}
+
+Node::~Node() {
     nNode --;
 }
 
@@ -96,7 +108,7 @@ void Program::buildSymTab() {
 
     // Look for undefined symbols
     for (auto e:*eqs) {
-        Analysis<ir::Identifier> a = Analysis<ir::Identifier>(this);
+        Analysis<ir::Identifier> a = Analysis<ir::Identifier>();
         auto checkDefined = [this] (ir::Identifier *s) -> void {
             std::string name = s->getName();
             if (this->symTab->search(name) == NULL)
@@ -145,6 +157,10 @@ BCLst *Program::getBCs() {
     return bcs;
 }
 
+DeclLst *Program::getDecls() {
+    return decls;
+}
+
 Expr::Expr(Node *p) : Node(p) {}
 
 BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) : Expr(p) {
@@ -152,6 +168,24 @@ BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) : Expr(p) {
     children.push_back(lOp);
     children.push_back(rOp);
     this->op = op;
+}
+
+Node *BinExpr::copy() {
+    Expr *l = dynamic_cast<Expr *>(getLeftOp()->copy());
+    Expr *r = dynamic_cast<Expr *>(getRightOp()->copy());
+    return new BinExpr(l, op, r);
+}
+
+void BinExpr::dump(std::ostream &os) const {
+    os << op;
+}
+
+Expr *BinExpr::getLeftOp() const {
+    return dynamic_cast<Expr *>(children[0]);
+}
+
+Expr *BinExpr::getRightOp() const {
+    return dynamic_cast<Expr *>(children[1]);
 }
 
 UnaryExpr::UnaryExpr(Expr *expr, char op, Node *p) : Expr(p) {
@@ -167,16 +201,9 @@ void UnaryExpr::dump(std::ostream& os) const {
     os << op << *this->getExpr();
 }
 
-void BinExpr::dump(std::ostream &os) const {
-    os << op;
-}
-
-Expr *BinExpr::getLeftOp() const {
-    return dynamic_cast<Expr *>(children[0]);
-}
-
-Expr *BinExpr::getRightOp() const {
-    return dynamic_cast<Expr *>(children[1]);
+Node *UnaryExpr::copy() {
+    Expr *l = dynamic_cast<Expr *>(getExpr()->copy());
+    return new UnaryExpr(l, op);
 }
 
 Identifier::Identifier(std::string *n, Node *p) : name(*n), Expr(p) { }
@@ -185,6 +212,10 @@ Identifier::Identifier(std::string n, Node *p) :  Identifier(&n, p) { }
 
 std::string Identifier::getName() {
     return name;
+}
+
+Node *Identifier::copy() {
+    return new Identifier(name);
 }
 
 void Identifier::dump(std::ostream& os) const {
@@ -208,6 +239,12 @@ Expr *Decl::getDef() {
     return dynamic_cast<Expr *>(children[1]);
 }
 
+Node *Decl::copy() {
+    Expr *l = dynamic_cast<Expr *>(children[0]->copy());
+    Expr *r = dynamic_cast<Expr *>(children[1]->copy());
+    return new Decl(r, l);
+}
+
 Equation::Equation(Expr *lhs, Expr *rhs, Node *p) : Node(p) {
     children.push_back(lhs);
     children.push_back(rhs);
@@ -225,6 +262,12 @@ Expr *Equation::getRHS() {
     return dynamic_cast<Expr *>(children[1]);
 }
 
+Node *Equation::copy() {
+    Expr *l = dynamic_cast<Expr *>(getLHS());
+    Expr *r = dynamic_cast<Expr *>(getRHS());
+    return new Equation(l, r);
+}
+
 BC::BC(Equation *cond, Equation *loc, Node *p) : Node(p) {
     children.push_back(cond);
     children.push_back(loc);
@@ -232,6 +275,12 @@ BC::BC(Equation *cond, Equation *loc, Node *p) : Node(p) {
 
 void BC::dump(std::ostream& os) const {
     os << "BC";
+}
+
+Node *BC::copy() {
+    Equation *c = dynamic_cast<Equation *>(children[0]->copy());
+    Equation *l = dynamic_cast<Equation *>(children[1]->copy());
+    return new BC(c, l);
 }
 
 FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, p) {
@@ -252,12 +301,38 @@ ExprLst *FuncCall::getArgs() {
     return ret;
 }
 
+Node *FuncCall::copy() {
+    ExprLst *args = new ExprLst();
+    for (auto a: *getArgs()) {
+        Expr *p = dynamic_cast<Expr *>(a->copy());
+        args->push_back(p);
+    }
+    return new FuncCall(name, args);
+}
+
 ArrayExpr::ArrayExpr(std::string name, ExprLst *indices, Node *p) : Identifier(name, p) {
     for(auto c: *indices)
         children.push_back(c);
 }
 
+Node *ArrayExpr::copy() {
+    ExprLst *idx = new ExprLst();
+    for (auto i: children) {
+        Expr *p = dynamic_cast<Expr *>(i->copy());
+        idx->push_back(p);
+    }
+    return new ArrayExpr(name, idx);
+}
+
 IndexRange::IndexRange(Expr *lb, Expr *ub, Node *p) : BinExpr(lb, ':', ub, p) { }
+
+Expr *IndexRange::getLB() {
+    return dynamic_cast<Expr *>(children[0]);
+}
+
+Expr *IndexRange::getUB() {
+    return dynamic_cast<Expr *>(children[1]);
+}
 
 }
 

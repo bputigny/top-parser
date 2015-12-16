@@ -22,6 +22,8 @@ AC_PROG_CXX
 AC_PROG_LEX
 AC_PROG_YACC
 AC_PROG_LIBTOOL
+AC_CHECK_PROG(DOT, dot, no)
+AS_IF([test "x$DOT" = "xno"], [AC_DEFINE(HAVE_DOT, [1], [is dot installed])])
 
 AC_CHECK_HEADER(cassert, [], [AC_ERROR(cassert not found)])
 AC_CHECK_HEADER(functional, [], [AC_ERROR(functional not found)])

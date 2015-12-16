@@ -3,15 +3,23 @@
 #include "Printer.h"
 #include "config.h"
 
+#include <cassert>
+
 void SymTab::push_back(ir::Symbol *s) {
     add(s);
 }
 
 void SymTab::add(ir::Symbol *s) {
+    assert(s);
     if (this->search(s->getName()) == NULL)
         std::list<ir::Symbol *>::push_back(s);
     else
         err() << s->getName() << " already defined";
+}
+
+ir::Symbol *SymTab::search(ir::Identifier *id) const {
+    assert(id);
+    return search(id->getName());
 }
 
 ir::Symbol *SymTab::search(const std::string& id) const {

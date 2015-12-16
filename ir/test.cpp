@@ -4,6 +4,7 @@
 
 int main() {
 
+    Printer::init(2);
     std::ofstream file;
 
     ir::Expr *v0 = new ir::Identifier("v0");
@@ -26,7 +27,7 @@ int main() {
                         '+',
                         v4))));
 
-    std::cout << *e << "\n";
+    log() << *e << "\n";
 
     ir::Node *n0 = e->getLeftOp();
     ir::Node *n1 = e->getRightOp();
@@ -36,19 +37,23 @@ int main() {
     file.open("IR0.dot");
     e->dumpDOT(file, true);
     file.close();
+    e->display("IR0.dot");
 
     e->replace(rOp, new ir::Value<float>(42));
     file.open("IR1.dot");
     e->dumpDOT(file, true);
     file.close();
+    e->display("IR1.dot");
 
-    std::cout << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
-    std::cout << "delete rOp\n";
-    delete(rOp);
-    std::cout << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
+    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
+    log() << "delete rOp\n";
+    rOp->clear();
+    delete rOp;
+    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
 
-    std::cout << "delete e\n";
-    delete(e);
-    std::cout << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
+    log() << "delete e\n";
+    e->clear();
+    delete e;
+    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
     return 0;
 }
