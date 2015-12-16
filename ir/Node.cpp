@@ -162,6 +162,7 @@ DeclLst *Program::getDecls() {
 }
 
 Expr::Expr(Node *p) : Node(p) {}
+Expr::~Expr() {};
 
 BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) : Expr(p) {
     assert(lOp && rOp);
@@ -278,9 +279,17 @@ void BC::dump(std::ostream& os) const {
 }
 
 Node *BC::copy() {
-    Equation *c = dynamic_cast<Equation *>(children[0]->copy());
-    Equation *l = dynamic_cast<Equation *>(children[1]->copy());
+    Equation *c = dynamic_cast<Equation *>(getCond()->copy());
+    Equation *l = dynamic_cast<Equation *>(getLoc()->copy());
     return new BC(c, l);
+}
+
+Equation *BC::getLoc() {
+    return dynamic_cast<Equation *>(children[1]);
+}
+
+Equation *BC::getCond() {
+    return dynamic_cast<Equation *>(children[0]);
 }
 
 FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, p) {

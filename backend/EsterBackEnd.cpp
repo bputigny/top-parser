@@ -304,8 +304,6 @@ void EsterBackEnd::emitNonLocEqs(std::ostream& os) {
         assert(sym);
         ir::Expr *def = sym->getDef();
         assert(def);
-        ir::Identifier *id = new ir::Identifier(s);
-        ir::Expr *bc = new ir::BinExpr(new ir::Identifier(s), '-', def);
 
         int value;
         Analysis<ir::ArrayExpr> a;
@@ -363,14 +361,17 @@ void EsterBackEnd::emitNonLocEqs(std::ostream& os) {
             ir::Identifier *id = new ir::Identifier(ae->getName());
             assert(ae->getParent());
             ae->getParent()->replace(ae, id);
+            ae->clear();
+            delete(ae);
         };
         replace.run(replaceArray, cond);
         cond->display();
 
-        loc->clear();
-        delete(loc);
+        ir::BC *bc = new ir::BC(cond, loc);
 
-        delete(id);
+        emitBC(os, bc);
+
+        bc->clear();
         delete(bc);
     }
 }
@@ -429,7 +430,18 @@ void EsterBackEnd::emitDecls(std::ostream& os) {
 }
 
 void EsterBackEnd::emitBC(std::ostream& os, ir::BC *bc) {
-
+    if (ir::Value<int> *l = dynamic_cast<ir::Value<int> *>(bc->getLoc()->getRHS())) {
+        if (l->getValue() == 1) {
+            os << "        op.bc_bot1_add();\n";
+        }
+        else {
+            os << "        op.bc_bot2_add();\n";
+        }
+    }
+    else {
+        os << "I dont't know how to set this BC...\n";
+        exit(EXIT_FAILURE);
+    }
 }
 
 void EsterBackEnd::emitSetValue(std::ostream& os) {

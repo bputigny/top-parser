@@ -25,6 +25,7 @@ class Node : public DOT {
         std::vector<Node *> children;
     public:
         Node(Node *par = NULL);
+        virtual ~Node();
         Node *getParent();
         virtual void dump(std::ostream&) const;
         virtual void dumpDOT(std::ostream&, bool root = true) const;
@@ -33,7 +34,6 @@ class Node : public DOT {
         bool isLeaf();
         std::string getSourceLocation();
         void setSourceLocation(std::string);
-        ~Node();
         void clear();
         void replace(Node *, Node *);
         static int getNodeNumber();
@@ -44,6 +44,7 @@ class Node : public DOT {
 class Expr : public Node {
     public:
         Expr(Node *p = NULL);
+        virtual ~Expr();
 };
 
 template <class T>
@@ -146,6 +147,8 @@ class BC : public Node {
         BC(Equation *cond, Equation *loc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
+        Equation *getLoc();
+        Equation *getCond();
 };
 
 class BCLst : public std::list<BC *> {

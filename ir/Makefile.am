@@ -1,4 +1,4 @@
-EXTRA_DIST = IR.h
+EXTRA_DIST = IR.h SymTab.h
 
 AM_CXXFLAGS = -I$(srcdir)/.. -I$(srcdir)/../utils -I$(srcdir)/../frontend
 
@@ -6,7 +6,7 @@ noinst_LTLIBRARIES = libir.la
 noinst_bindir = .
 noinst_bin_PROGRAMS = test-ir
 
-libir_la_SOURCES = Node.cpp Symbol.cpp DOT.cpp # Expr.cpp Func.cpp Equation.cpp
+libir_la_SOURCES = Node.cpp Symbol.cpp DOT.cpp SymTab.cpp # Expr.cpp Func.cpp Equation.cpp
 
 test_ir_SOURCES = test.cpp
-test_ir_LDADD = ../frontend/libparser.la ../utils/libutils.la libir.la
+test_ir_LDADD = ../utils/libutils.la libir.la
