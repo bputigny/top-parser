@@ -28,7 +28,7 @@ class Node : public DOT {
         virtual ~Node();
         Node *getParent();
         virtual void dump(std::ostream&) const;
-        virtual void dumpDOT(std::ostream&, bool root = true) const;
+        virtual void dumpDOT(std::ostream&, std::string title="", bool root = true) const;
         std::vector<Node *>& getChildren();
         std::vector<Node *> getLeafs();
         bool isLeaf();
@@ -73,6 +73,7 @@ class BinExpr : public Expr {
         BinExpr(Expr *lOp, char op, Expr *rOp, Node *parent = NULL);
         Expr *getRightOp() const;
         Expr *getLeftOp() const;
+        char getOp();
         virtual void dump(std::ostream&) const;
         virtual Node *copy();
 };
@@ -89,7 +90,7 @@ class UnaryExpr : public Expr {
         virtual Node *copy();
 };
 
-class ExprLst : public std::list<Expr *> {
+class ExprLst : public std::vector<Expr *> {
 };
 
 class Identifier : public Expr {
@@ -106,6 +107,7 @@ class Identifier : public Expr {
 class FuncCall : public Identifier {
     public:
         FuncCall(std::string, ExprLst *args = NULL, Node *p = NULL);
+        FuncCall(std::string, Expr *arg, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         ExprLst *getArgs();
         virtual Node *copy();
@@ -163,7 +165,7 @@ class Program : public DOT {
     public:
         Program(SymTab *, DeclLst *decls, EqLst *eqs, BCLst *bcs);
         void buildSymTab();
-        virtual void dumpDOT(std::ostream& os, bool root = true) const;
+        virtual void dumpDOT(std::ostream& os, std::string title, bool root = true) const;
         SymTab *getSymTab();
         EqLst *getEqs();
         BCLst *getBCs();

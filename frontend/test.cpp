@@ -1,4 +1,5 @@
 #include "FrontEnd.h"
+#include "Analysis.h"
 
 #include <fstream>
 
@@ -13,15 +14,6 @@ int main(int argc, char *argv[]) {
     else {
         p = fe.parse("test.edl");
     }
-
-    f.open("test.dot");
-    p->dumpDOT(f);
-    p->buildSymTab();
-    f.close();
-
-    f.open("symtab.dot");
-    p->getSymTab()->dumpDOT(f);
-    f.close();
 
     return 0;
 }

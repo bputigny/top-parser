@@ -37,9 +37,12 @@ void Node::setParents() {
     }
 }
 
-void Node::dumpDOT(std::ostream& os, bool root) const {
+void Node::dumpDOT(std::ostream& os, std::string title, bool root) const {
     if (root) {
         os << "digraph ir {\n";
+        if (title != "") {
+            os << "graph [label=\"" << title << "\", labelloc=t, fontsize=20];\n";
+        }
         os << "node [shape = Mrecord]\n";
     }
     os << (long)this << " [label=\"";
@@ -51,7 +54,7 @@ void Node::dumpDOT(std::ostream& os, bool root) const {
     }
 
     for (auto c:children) {
-        c->dumpDOT(os, false);
+        c->dumpDOT(os, title, false);
     }
     if (root) {
         os << "}\n";
@@ -118,7 +121,7 @@ void Program::buildSymTab() {
     }
 }
 
-void Program::dumpDOT(std::ostream& os, bool root) const {
+void Program::dumpDOT(std::ostream& os, std::string title, bool root) const {
     if (root) {
         os << "digraph prog {\n";
         os << "node [shape = Mrecord]\n";
@@ -128,17 +131,17 @@ void Program::dumpDOT(std::ostream& os, bool root) const {
     }
     for(auto d: *decls) {
         os << "DEFs -> " << (long)d << "\n";
-        d->dumpDOT(os, false);
+        d->dumpDOT(os, title, false);
     }
 
     for(auto e: *eqs) {
         os << "EQs -> " << (long)e << "\n";
-        e->dumpDOT(os, false);
+        e->dumpDOT(os, title, false);
     }
 
     for(auto c: *bcs) {
         os << "BCs -> " << (long)c << "\n";
-        c->dumpDOT(os, false);
+        c->dumpDOT(os, title, false);
     }
     if (root) {
         os << "}\n";
@@ -189,6 +192,10 @@ Expr *BinExpr::getRightOp() const {
     return dynamic_cast<Expr *>(children[1]);
 }
 
+char BinExpr::getOp() {
+    return op;
+}
+
 UnaryExpr::UnaryExpr(Expr *expr, char op, Node *p) : Expr(p) {
     children.push_back(expr);
     this->op = op;
@@ -198,8 +205,12 @@ Expr *UnaryExpr::getExpr() const {
     return dynamic_cast<Expr *>(children[0]);
 }
 
+char UnaryExpr::getOp() const {
+    return op;
+}
+
 void UnaryExpr::dump(std::ostream& os) const {
-    os << op << *this->getExpr();
+    os << op; // << *this->getExpr();
 }
 
 Node *UnaryExpr::copy() {
@@ -296,6 +307,10 @@ FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, 
     for (auto c: *args) {
         children.push_back(c);
     }
+}
+
+FuncCall::FuncCall(std::string name, Expr *arg, Node *p) : Identifier(name, p) {
+    children.push_back(arg);
 }
 
 void FuncCall::dump(std::ostream& os) const {

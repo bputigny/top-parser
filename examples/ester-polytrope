@@ -4,11 +4,11 @@ let
   param double omega
   param double n
 
-  var phi, phi_ex
+  var phi, phi_ex, lambda
 
   phi0 = Tmean(phi[0, :])
   # lambda1 = 1 / (phi[1, 1] - phi[0, 0]) # this one should break (2 /= array expr)
-  lambda = 1 / (Tpole(phi[1, :]) - phi0)
+  # lambda = 1 / (Tpole(phi[1, :]) - phi0)
   h = 1 - lambda * (phi - phi0) + .5 * pow(omega, 2) * pow(r*sin(theta), 2)
 
 in
@@ -18,3 +18,4 @@ in
 with
   diff(phi, r) = 0    at r = 0
   phi = phi_ex        at r = 1
+  lambda * (Tpole(phi) - phi0) = 1 at r = 1

@@ -34,16 +34,10 @@ int main() {
 
     ir::Node *rOp = e->getRightOp();
 
-    file.open("IR0.dot");
-    e->dumpDOT(file, true);
-    file.close();
-    e->display("IR0.dot");
+    e->display("IR0");
 
     e->replace(rOp, new ir::Value<float>(42));
-    file.open("IR1.dot");
-    e->dumpDOT(file, true);
-    file.close();
-    e->display("IR1.dot");
+    e->display("IR1");
 
     log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
     log() << "delete rOp\n";

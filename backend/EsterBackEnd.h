@@ -32,6 +32,17 @@ class EsterBackEnd : public BackEnd {
         void emitNonLocEqs(std::ostream &os);
         void findVariables();
         bool isVar(std::string);
+        std::string eqName(ir::Equation *);
+
+        ir::Expr *diff(ir::Expr *, ir::Identifier *id);
+        ir::Expr *diff(ir::Expr *, std::string);
+
+        void writeBC(std::ostream& os, std::string eq,
+                ir::Expr *e, bool neg = true);
+        void writeAddBCTerm(std::ostream& os, std::string eq,
+                ir::Expr *e, bool neg = false);
+        void writeAddBCTerm(std::ostream& os, std::string eq,
+                ir::Identifier *id, bool neg);
 
     public:
         EsterBackEnd(ir::Program *p);

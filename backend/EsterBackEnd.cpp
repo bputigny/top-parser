@@ -8,6 +8,232 @@
 #include <cassert>
 #include <fstream>
 
+void EsterBackEnd::writeAddBCTerm(std::ostream& os, std::string eq,
+        ir::Identifier *id, bool neg) {
+    assert(id);
+    std::string negOp = "";
+    if (neg)
+        negOp = "-";
+    if (auto fc = dynamic_cast<ir::FuncCall*>(id)) {
+        assert(fc->getName() == "D");
+        assert(fc->getArgs()->size() == 1);
+        if (auto var = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0))) {
+            std::string varName = var->getName();
+            os << "        op.bc_add_d(\"" << eq << "\", \"" << varName <<
+                "\", " << negOp << "ones(val_" <<
+                varName << "->ncols(), " << varName << "->nrows()));\n";
+        }
+        else if (auto be = dynamic_cast<ir::BinExpr *>(fc->getArgs()->at(0))) {
+            auto l = dynamic_cast<ir::Identifier *>(be->getLeftOp());
+            auto r = dynamic_cast<ir::Identifier *>(be->getRightOp());
+            if (! l || ! r) {
+                err() << "BC not handled\n";
+                exit(EXIT_FAILURE);
+            }
+
+            ir::Identifier *theVar = NULL;
+            ir::Identifier *theProd = NULL;
+
+            if (isVar(l->getName())) {
+                theVar = l;
+                theProd = r;
+            }
+            else if (isVar(r->getName())) {
+                theVar = r;
+                theProd = l;
+            }
+            else {
+                err() << "BC not handled\n";
+                exit(EXIT_FAILURE);
+            }
+            os << "        op.bc_add_r(\"" << eq << "\", \"" << theVar->getName() <<
+                "\", " << negOp << "ones(val_" << theVar->getName() <<
+                "->ncols(), " << theVar->getName() << "->nrows()), " << negOp << "val_" <<
+                theProd->getName() << ");\n";
+        }
+    }
+    else {
+        err() << "unhandled Identifier in BC...\n";
+        exit(EXIT_FAILURE);
+    }
+}
+
+void EsterBackEnd::writeAddBCTerm(std::ostream& os, std::string eq,
+        ir::Expr *e, bool neg) {
+    assert(e);
+    if (auto be = dynamic_cast<ir::BinExpr *>(e)) {
+        if (be->getOp() != '*') {
+            err() << "I can only add terms! (i.e., products)\n";
+            exit(EXIT_FAILURE);
+        }
+        ir::Expr *l = be->getLeftOp();
+        ir::Expr *r = be->getRightOp();
+        if (auto *id = dynamic_cast<ir::Identifier *>(be)) {
+            if (id->getName() == "D") {
+                ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(be);
+                assert(fc);
+                assert(fc->getArgs()->size() == 1);
+                ir::Expr *arg = (*fc->getArgs())[0];
+                // if (auto )
+            }
+        }
+    }
+    else {
+        err() << "I can only add terms! (i.e., products)\n";
+        exit(EXIT_FAILURE);
+    }
+}
+
+void EsterBackEnd::writeBC(std::ostream& os, std::string eq,
+        ir::Expr *e, bool neg) {
+    assert(e);
+    if (auto be = dynamic_cast<ir::BinExpr *>(e)) {
+        char op = be->getOp();
+        if (op == '+') {
+            writeBC(os, eq, be->getLeftOp(), neg);
+            writeBC(os, eq, be->getRightOp(), neg);
+        }
+        else if (op == '-') {
+            writeBC(os, eq, be->getLeftOp(), neg);
+            writeBC(os, eq, be->getRightOp(), !neg);
+        }
+        else if (op == '*') {
+            writeAddBCTerm(os, eq, e, neg);
+        }
+        else {
+            err() << "unsupported operator in BC: " << op << "\n";
+            exit(EXIT_FAILURE);
+        }
+    }
+    else if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
+        char op = ue->getOp();
+        if (op == '-') {
+            writeBC(os, eq, ue->getExpr(), !neg);
+        }
+        else {
+            err() << "unsupported operator in BC: " << op << "\n";
+            exit(EXIT_FAILURE);
+        }
+    }
+    else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
+        if (id->getName() == "D") {
+            writeAddBCTerm(os, eq, id, neg);
+        }
+        else {
+            err() << "unsupported expression in bc...\n";
+            exit(EXIT_FAILURE);
+        }
+    }
+    else {
+        err() << "unsupported expression in bc...\n";
+        exit(EXIT_FAILURE);
+    }
+}
+
+ir::Expr *EsterBackEnd::diff(ir::Expr *expr, ir::Identifier *id) {
+    assert(id && expr);
+    return diff(expr, id->getName());
+}
+
+ir::Expr *EsterBackEnd::diff(ir::Expr *expr, std::string var) {
+    assert(expr);
+    if (ir::Identifier *id = dynamic_cast<ir::Identifier *>(expr)) {
+        if (id->getName() == var) {
+            return new ir::FuncCall("D", id);
+        }
+        else {
+            if (ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(id)) {
+                bool depOnVar = false;
+                Analysis<ir::Identifier> a;
+                auto checkDeps = [&depOnVar, &var] (ir::Identifier *i) {
+                    if (i->getName() == var) {
+                        depOnVar = true;
+                    }
+                };
+                for (auto arg: *fc->getArgs()) {
+                    a.run(checkDeps, arg);
+                }
+                if (depOnVar) {
+                    return new ir::FuncCall("D", id);
+                }
+                return NULL;
+            }
+            else {
+                return NULL;
+            }
+        }
+    }
+    else if (dynamic_cast<ir::Value<int> *>(expr) ||
+            dynamic_cast<ir::Value<float> *>(expr)) {
+        return NULL;
+    }
+    else if (ir::UnaryExpr *ue = dynamic_cast<ir::UnaryExpr *>(expr)) {
+        char op = ue->getOp();
+        ir::Expr *d = diff(ue->getExpr(), var);
+        if (d)
+            return new ir::UnaryExpr(d, op);
+        return NULL;
+    }
+    else if (ir::BinExpr *be = dynamic_cast<ir::BinExpr *>(expr)) {
+        char op = be->getOp();
+        ir::Expr *dl = diff(be->getLeftOp(), var);
+        ir::Expr *dr = diff(be->getRightOp(), var);
+        if (op == '+' || op == '-') {
+            if (dr && dl) {
+                return new ir::BinExpr(dl, op, dr);
+            }
+            if (dl) {
+                return dl;
+            }
+            if (dr) {
+                if (op == '-')
+                    return new ir::UnaryExpr(dr, '-');
+                else
+                    return dr;
+            }
+            assert(dl == NULL && dr == NULL);
+            return NULL;
+        }
+        else if (op == '*') {
+            if (dr && dl) {
+                return new ir::BinExpr(
+                        new ir::BinExpr(
+                            dl,
+                            '*',
+                            be->getRightOp()),
+                        '+',
+                        new ir::BinExpr(
+                            be->getLeftOp(),
+                            '*',
+                            dr));
+            }
+            if (dl) {
+                return new ir::BinExpr(
+                            dl,
+                            '*',
+                            be->getRightOp());
+            }
+            if (dr) {
+                return new ir::BinExpr(
+                            be->getLeftOp(),
+                            '*',
+                            dr);
+            }
+            assert(dl == NULL && dr == NULL);
+            return NULL;
+        }
+        else {
+            err() << "diff: don't know how to differentiate operator: " << op << "\n";
+            exit(EXIT_FAILURE);
+        }
+    }
+    else {
+        err() << "non-handled expression type in diff\n";
+        exit(EXIT_FAILURE);
+    }
+
+}
+
 EsterBackEnd::EsterBackEnd(ir::Program *p) {
 
     std::ofstream file;
@@ -32,10 +258,6 @@ EsterBackEnd::EsterBackEnd(ir::Program *p) {
     symTab->add(new ir::Variable("r", new ir::Identifier("S.r"), true));
     symTab->add(new ir::Variable("theta", new ir::Identifier("S.theta"), true));
 
-    file.open("IR0.dot");
-    prog->dumpDOT(file);
-    file.close();
-    
     log() << "buildSymTab:\n";
     prog->buildSymTab();
     log() << "\n";
@@ -47,20 +269,6 @@ EsterBackEnd::EsterBackEnd(ir::Program *p) {
     log() << "findVariables:\n";
     findVariables();
     log() << "\n";
-
-    file.open("SymTab.dot");
-    prog->getSymTab()->dumpDOT(file);
-    file.close();
-
-    file.open("AST.dot");
-    prog->dumpDOT(file);
-    file.close();
-
-    // nonLocEqToBC();
-
-    // file.open("IR1.dot");
-    // prog->dumpDOT(file);
-    // file.close();
 }
 
 EsterBackEnd::~EsterBackEnd() {
@@ -109,7 +317,8 @@ void EsterBackEnd::findVariables() {
                     if (ir::Symbol *s = symTab->search(id)) {
                         if (s->getDef() == NULL) {
                             if (dynamic_cast<ir::Variable *>(s)) {
-                                syms.push_back(id->getName());
+                                if (!isVar(id->getName()))
+                                    syms.push_back(id->getName());
                             }
                         }
                         else {
@@ -120,6 +329,7 @@ void EsterBackEnd::findVariables() {
                             };
                             a.run(getArrayExpr, s->getDef());
                             if (!arrays.empty()) {
+                                if (!isVar(id->getName()))
                                 syms_dep.push_back(id->getName());
                             }
                             exprAnal(s->getDef());
@@ -140,13 +350,6 @@ void EsterBackEnd::findVariables() {
         a.run(exprAnal, eq->getLHS());
         a.run(exprAnal, eq->getRHS());
     }
-
-    // clear duplicates
-    std::sort(syms.begin(), syms.end());
-    syms.erase(std::unique(syms.begin(), syms.end()), syms.end());
-
-    std::sort(syms_dep.begin(), syms_dep.end());
-    syms_dep.erase(std::unique(syms_dep.begin(), syms_dep.end()), syms_dep.end());
 
     for (auto n: syms) {
         log() << n << " is a variable\n";
@@ -212,6 +415,10 @@ void EsterBackEnd::emitCode(std::ostream& os) {
     this->emitFillOp(os);
     os << "\n";
     this->emitNonLocEqs(os);
+    os << "\n";
+    for (auto bc: *prog->getBCs()) {
+        this->emitBC(os, bc);
+    }
     os << "    }\n";
     os << "}\n";
 }
@@ -221,6 +428,23 @@ bool EsterBackEnd::isVar(std::string name) {
             [this, name] (std::string s) {return s == name;}) ||
         std::any_of(syms_dep.begin(), syms_dep.end(),
                 [this, name] (std::string s) {return s == name;});
+}
+
+std::string EsterBackEnd::eqName(ir::Equation *e) {
+    std::string eqName = "undef";
+    Analysis<ir::Identifier> a;
+    std::function<void (ir::Identifier *)> findEqName =
+        [&eqName] (ir::Identifier *i) {
+            if (!dynamic_cast<ir::FuncCall *>(i)) {
+                if (!dynamic_cast<ir::ArrayExpr *>(i)) {
+                    if (eqName == "undef") {
+                        eqName = i->getName();
+                    }
+                }
+            }
+        };
+    a.run(findEqName, e->getLHS());
+    return eqName;
 }
 
 void EsterBackEnd::emitEquations(std::ostream& os) {
@@ -236,8 +460,7 @@ void EsterBackEnd::emitEquations(std::ostream& os) {
                 '-',
                 e->getRHS());
 
-        std::string eqName = syms[n];
-        os << "    sym " << eqName << " = ";
+        os << "    sym " << eqName(e) << " = ";
         emitExpr(os, eq);
         os << ";\n";
         n ++;
@@ -254,7 +477,6 @@ void EsterBackEnd::emitFillOp(std::ostream& os) {
     os << "        op.reset();\n";
 
     for (auto e:*prog->getEqs()) {
-        std::string eqName = syms[n];
         Analysis<ir::Identifier> ea;
         std::vector<std::string> deps;
         std::function<void (ir::Identifier *)> emitVar =
@@ -286,7 +508,7 @@ void EsterBackEnd::emitFillOp(std::ostream& os) {
         deps.erase(std::unique(deps.begin(), deps.end()), deps.end());
 
         for (auto d: deps)
-            os << "        " << eqName << ".add(&op, \"" << eqName << "\", \""
+            os << "        " << eqName(e) << ".add(&op, \"" << eqName(e) << "\", \""
                 << d << "\");\n";
         n ++;
         os << "\n";
@@ -331,7 +553,6 @@ void EsterBackEnd::emitNonLocEqs(std::ostream& os) {
                 n ++;
             }
             if (nIdx != 1) {
-                e->display();
                 err() << "setting BC for " << s << " failed (fixed indices: " <<
                     nIdx << ")\n";
                 exit(EXIT_FAILURE);
@@ -346,7 +567,6 @@ void EsterBackEnd::emitNonLocEqs(std::ostream& os) {
         ir::Equation *loc = new ir::Equation(
                 new ir::Identifier("r"),
                 new ir::Value<int>(value));
-        loc->display();
 
         ir::Equation *cond = new ir::Equation(
                 new ir::BinExpr(
@@ -365,7 +585,6 @@ void EsterBackEnd::emitNonLocEqs(std::ostream& os) {
             delete(ae);
         };
         replace.run(replaceArray, cond);
-        cond->display();
 
         ir::BC *bc = new ir::BC(cond, loc);
 
@@ -430,16 +649,124 @@ void EsterBackEnd::emitDecls(std::ostream& os) {
 }
 
 void EsterBackEnd::emitBC(std::ostream& os, ir::BC *bc) {
+    std::string bcType = "";
+    std::string eq_name = eqName(bc->getCond());
     if (ir::Value<int> *l = dynamic_cast<ir::Value<int> *>(bc->getLoc()->getRHS())) {
         if (l->getValue() == 1) {
-            os << "        op.bc_bot1_add();\n";
+            bcType = "bc_bot1";
         }
         else {
-            os << "        op.bc_bot2_add();\n";
+            bcType = "bc_bot2";
+        }
+        Analysis<ir::FuncCall> a0;
+        Analysis<ir::Expr> a1;
+
+        // set RHS to zero
+        ir::Equation *cond = NULL;
+        if (auto *v = dynamic_cast<ir::Value<float> *>(bc->getCond()->getRHS())) {
+            if (v->getValue() == 0) {
+                cond = bc->getCond();
+            }
+        }
+        if (auto *v = dynamic_cast<ir::Value<int> *>(bc->getCond()->getRHS())) {
+            if (v->getValue() == 0) {
+                cond = bc->getCond();
+            }
+        }
+        if (cond == NULL) {
+            cond = new ir::Equation(
+                    new ir::BinExpr(
+                        bc->getCond()->getLHS(),
+                        '-',
+                        bc->getCond()->getRHS()),
+                    new ir::Value<float>(0));
+        }
+
+        // replace Tmean, Tpole... functions by the multiplication
+        auto opToMult = [] (ir::FuncCall *fc) {
+            assert(fc);
+            if (fc->getName() == "Tmean" ||
+                    fc->getName() == "Tpole" ||
+                    fc->getName() == "Teq") {
+                ir::ExprLst *args = fc->getArgs();
+                assert(args);
+                if (fc->getArgs()->size() != 1) {
+                    err() << *fc << " should only have one argument\n";
+                    exit(EXIT_FAILURE);
+                }
+                ir::BinExpr *mult = new ir::BinExpr(
+                        (*args)[0],
+                        '*',
+                        new ir::Identifier(fc->getName()));
+                assert(fc->getParent());
+                fc->getParent()->replace(fc, mult);
+                // fc->clear();
+                // delete(fc);
+            }
+            if (fc->getName() == "diff") {
+                ir::ExprLst *args = fc->getArgs();
+                assert(args);
+                if (fc->getArgs()->size() != 2) {
+                    err() << *fc << " should only have two arguments\n";
+                    exit(EXIT_FAILURE);
+                }
+                if (auto r = dynamic_cast<ir::Identifier *>((*args)[1])) {
+                    if (r->getName() == "r") {
+                        fc->getParent()->replace(fc, 
+                                new ir::BinExpr(
+                                    new ir::Identifier("map.R"),
+                                    '*',
+                                    (*args)[0]));
+                    }
+                }
+            }
+
+        };
+
+        ir::Expr *diffExpr = cond->getLHS();
+        ir::Expr *d = NULL;
+        for (auto v: syms) {
+            ir::Expr *dv = diff(diffExpr, v);
+            if (dv) {
+                if (d) {
+                    d = new ir::BinExpr(dynamic_cast<ir::Expr *>(d->copy()),
+                            '+',
+                            dynamic_cast<ir::Expr *>(dv->copy()));
+                }
+                else
+                    d = dv;
+            }
+        }
+        for (auto v: syms_dep) {
+            ir::Expr *dv = diff(diffExpr, v);
+            if (dv) {
+                if (d) {
+                    d = new ir::BinExpr(dynamic_cast<ir::Expr *>(d->copy()),
+                            '+',
+                            dynamic_cast<ir::Expr *>(dv->copy()));
+                }
+                else
+                    d = dv;
+            }
+        }
+
+        if (d) {
+            // diffExpr->display("expr");
+            // d->display("D expr");
+            d->setParents();
+            a0.run(opToMult, d);
+            // d->display("D expr (with mul op)");
+            writeBC(os, eq_name, d);
+            // d->display("BC");
+        }
+        // mult(cond->getLHS(), new ir::Identifier("x"))->display();
+        if (cond != bc->getCond()) {
+            cond->clear();
+            delete(cond);
         }
     }
     else {
-        os << "I dont't know how to set this BC...\n";
+        os << "I don't know how to set this BC (location not too complex)...\n";
         exit(EXIT_FAILURE);
     }
 }

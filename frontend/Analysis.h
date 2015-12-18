@@ -19,6 +19,20 @@ class Analysis {
                 check(n);
             }
         }
+        inline ir::Node *run(std::function<ir::Node *(T *)> check, ir::Node *root) {
+            for (auto c:root->getChildren()) {
+                run(check, c);
+            }
+            if (T *n = dynamic_cast<T *>(root)) {
+                check(n);
+            }
+            return NULL;
+        }
 };
+
+// ir::Expr *factorize(ir::Expr *);
+// ir::Expr *expand(ir::Expr *);
+ir::Expr *diff(ir::Expr *, ir::Identifier *);
+ir::Expr *diff(ir::Expr *, std::string);
 
 #endif // ANALYSIS_H

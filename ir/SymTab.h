@@ -22,7 +22,7 @@ class SymTab : public std::list<ir::Symbol *>, public DOT {
         void add(ir::Symbol *s);
         ir::Symbol *search(const std::string& id) const;
         ir::Symbol *search(ir::Identifier *) const;
-        void dumpDOT(std::ostream& os, bool root = true) const;
+        void dumpDOT(std::ostream& os, std::string title="", bool root=true) const;
 };
 
 #endif // SYMTAB_H

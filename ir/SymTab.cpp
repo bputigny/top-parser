@@ -31,7 +31,7 @@ ir::Symbol *SymTab::search(const std::string& id) const {
     return NULL;
 }
 
-void SymTab::dumpDOT(std::ostream& os, bool root) const {
+void SymTab::dumpDOT(std::ostream& os, std::string title, bool root) const {
     os << "digraph SymTab {\n";
     os << "node [shape=Mrecord]\n";
 
@@ -73,7 +73,7 @@ void SymTab::dumpDOT(std::ostream& os, bool root) const {
     for (auto s:*this) {
         if (s->getDef()) {
             os << (long)this << ":" << (long)s << " -> " << (long)s->getDef() << ";\n";
-            s->getDef()->dumpDOT(os, false);
+            s->getDef()->dumpDOT(os, title, false);
             os << ";\n";
         }
     }
