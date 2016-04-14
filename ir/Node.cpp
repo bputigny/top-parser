@@ -231,7 +231,10 @@ Node *Identifier::copy() {
 }
 
 void Identifier::dump(std::ostream& os) const {
-    os << "ID: " << name;
+    if (name == "\\")
+        os << "ID: \\\\lambda";
+    else
+        os << "ID: " << name;
 }
 
 Decl::Decl(Expr *lhs, Expr *rhs) {

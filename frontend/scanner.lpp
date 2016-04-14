@@ -21,6 +21,7 @@ SPACE		[ \t]
 
 \n              { comment = 0; }
 "#"             { comment = 1; }
+"\\"            { if (!comment) { return KW_LAMBDA;} }
 "let"           { if (!comment) { return KW_LET;} }
 "param"         { if (!comment) { return KW_PARAM;} }
 "var"           { if (!comment) { return KW_VAR;} }

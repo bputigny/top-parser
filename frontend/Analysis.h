@@ -30,6 +30,8 @@ class Analysis {
         }
 };
 
+std::vector<ir::Identifier *> getIds(ir::Expr *e);
+
 // ir::Expr *factorize(ir::Expr *);
 // ir::Expr *expand(ir::Expr *);
 ir::Expr *diff(ir::Expr *, ir::Identifier *);
