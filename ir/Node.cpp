@@ -218,7 +218,7 @@ Node *UnaryExpr::copy() {
     return new UnaryExpr(l, op);
 }
 
-Identifier::Identifier(std::string *n, Node *p) : name(*n), Expr(p) { }
+Identifier::Identifier(std::string *n, Node *p) : Expr(p), name(*n) { }
 
 Identifier::Identifier(std::string n, Node *p) :  Identifier(&n, p) { }
 

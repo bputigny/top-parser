@@ -9,18 +9,24 @@ class TopBackEnd : public BackEnd {
 
     private:
         ir::Program *prog;
-        ir::Expr *splitIntoTerms(ir::Expr *);
-
+        std::vector<ir::Expr *> *splitIntoTerms(ir::Expr *);
         std::vector<ir::Variable *> vars;
-        void emitEquation(std::ostream &, ir::Expr *lhs, ir::Expr *rhs);
-        void emitExpr(std::ostream&, ir::Expr *, int, bool minus = false);
-        void emitTerm(std::ostream&, ir::Expr *, int, bool minus = false);
-        void emitCoupling(std::ostream &,
-                ir::FuncCall *, ir::Identifier *, int, int, bool minus = false);
-        void emitCouplingExpr(std::ostream&, ir::Expr *);
-        void emitLLExpr(std::ostream&, ir::Expr *, int);
-        void emitScalar(std::ostream&,
-                ir::Expr *, bool minus = false);
+        void emitTerm(std::ostream&, ir::Expr *);
+        ir::Identifier *findVar(ir::Expr *e);
+        ir::FuncCall *findCoupling(ir::Expr *e);
+        int findDerivativeOrder(ir::Identifier *);
+        int findPower(ir::Expr *);
+        ir::Expr *extractLlExpr(ir::Expr *);
+        void emitExpr(std::ostream&, ir::Expr *);
+        void emitLVarExpr(std::ostream&, ir::Expr *, int);
+        void emitScalarExpr(std::ostream&, ir::Expr *);
+        void emitInitA(std::ostream&);
+
+        int nas;
+        int nartt;
+        int nart;
+        int ieq;
+        int nvar;
 
     public:
         int ivar(std::string);

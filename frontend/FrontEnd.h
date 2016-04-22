@@ -11,8 +11,8 @@ class FrontEnd {
     public:
         FrontEnd();
         ir::Program *parse(char *filename);
-        ir::Program *parse(const std::string& filename);
         ir::Program *parse(std::string& filename);
+        ir::Program *parse(const std::string& filename);
 };
 
 #endif

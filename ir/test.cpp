@@ -29,9 +29,6 @@ int main() {
 
     log() << *e << "\n";
 
-    ir::Node *n0 = e->getLeftOp();
-    ir::Node *n1 = e->getRightOp();
-
     ir::Node *rOp = e->getRightOp();
 
     e->display("IR0");

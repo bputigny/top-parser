@@ -13,7 +13,7 @@ void DOT::displayFile(const std::string& file) {
 
 
 void DOT::display(std::string title) {
-    char *n = tmpnam(NULL);
+    char *n = std::tmpnam(NULL);
     std::string tmp(n);
     std::ofstream f;
     f.open(tmp);

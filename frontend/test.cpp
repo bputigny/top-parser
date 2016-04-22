@@ -6,13 +6,12 @@
 int main(int argc, char *argv[]) {
     std::ofstream f;
     FrontEnd fe;
-    ir::Program *p = NULL;
 
     if (argc == 2) {
-        p = fe.parse(argv[1]);
+        fe.parse(argv[1]);
     }
     else {
-        p = fe.parse("test.edl");
+        fe.parse(std::string("test.edl"));
     }
 
     return 0;

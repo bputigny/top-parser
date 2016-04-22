@@ -96,6 +96,7 @@ class ExprLst : public std::vector<Expr *> {
 class Identifier : public Expr {
     protected:
         std::string name;
+
     public:
         Identifier(std::string *n, Node *parent = NULL);
         Identifier(std::string n, Node *parent = NULL);
