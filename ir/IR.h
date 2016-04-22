@@ -133,12 +133,14 @@ class Decl : public Node {
 class DeclLst : public std::list<Decl *> {
 };
 
+class BCLst;
 class Equation : public Node {
     public:
-        Equation(Expr *lhs, Expr *rhs, Node *p = NULL);
+        Equation(Expr *lhs, Expr *rhs, BCLst *bc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         Expr *getLHS();
         Expr *getRHS();
+        BCLst *getBCs();
         virtual Node *copy();
 };
 
@@ -162,14 +164,13 @@ class Program : public DOT {
         SymTab * symTab;
         DeclLst *decls;
         EqLst *eqs;
-        BCLst *bcs;
+
     public:
-        Program(SymTab *, DeclLst *decls, EqLst *eqs, BCLst *bcs);
+        Program(SymTab *, DeclLst *decls, EqLst *eqs);
         void buildSymTab();
         virtual void dumpDOT(std::ostream& os, std::string title, bool root = true) const;
         SymTab *getSymTab();
         EqLst *getEqs();
-        BCLst *getBCs();
         DeclLst *getDecls();
 };
 

@@ -89,11 +89,10 @@ void Node::replace(Node *child, Node *with) {
     std::replace(children.begin(), children.end(), child, with);
 }
 
-Program::Program(SymTab *symTab, DeclLst *decls, EqLst *eqs, BCLst *bcs) {
+Program::Program(SymTab *symTab, DeclLst *decls, EqLst *eqs) {
     this->symTab = symTab;
     this->decls = decls;
     this->eqs = eqs;
-    this->bcs = bcs;
 }
 
 void Program::buildSymTab() {
@@ -139,10 +138,10 @@ void Program::dumpDOT(std::ostream& os, std::string title, bool root) const {
         e->dumpDOT(os, title, false);
     }
 
-    for(auto c: *bcs) {
-        os << "BCs -> " << (long)c << "\n";
-        c->dumpDOT(os, title, false);
-    }
+    // for(auto c: *bcs) {
+    //     os << "BCs -> " << (long)c << "\n";
+    //     c->dumpDOT(os, title, false);
+    // }
     if (root) {
         os << "}\n";
     }
@@ -156,9 +155,9 @@ EqLst *Program::getEqs() {
     return eqs;
 }
 
-BCLst *Program::getBCs() {
-    return bcs;
-}
+// BCLst *Program::getBCs() {
+//     return bcs;
+// }
 
 DeclLst *Program::getDecls() {
     return decls;
@@ -260,9 +259,14 @@ Node *Decl::copy() {
     return new Decl(r, l);
 }
 
-Equation::Equation(Expr *lhs, Expr *rhs, Node *p) : Node(p) {
+Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p) {
     children.push_back(lhs);
     children.push_back(rhs);
+    if (bcs) {
+        for (auto bc:*bcs) {
+            children.push_back(bc);
+        }
+    }
 }
 
 void Equation::dump(std::ostream& os) const {
@@ -277,10 +281,21 @@ Expr *Equation::getRHS() {
     return dynamic_cast<Expr *>(children[1]);
 }
 
+BCLst *Equation::getBCs() {
+    BCLst *bcs = new BCLst();
+    for (auto c: children) {
+        if (auto bc = dynamic_cast<ir::BC *>(c)) {
+            bcs->push_back(bc);
+        }
+    }
+    return bcs;
+}
+
 Node *Equation::copy() {
     Expr *l = dynamic_cast<Expr *>(getLHS());
     Expr *r = dynamic_cast<Expr *>(getRHS());
-    return new Equation(l, r);
+    BCLst *bcs = getBCs();
+    return new Equation(l, r, bcs);
 }
 
 BC::BC(Equation *cond, Equation *loc, Node *p) : Node(p) {
