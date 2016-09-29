@@ -14,7 +14,7 @@
 namespace ir {
 
 ///
-/// Base class to represent programs AST
+/// Base class to represent program's AST
 ///
 class Node : public DOT {
     private:
@@ -35,10 +35,10 @@ class Node : public DOT {
         std::string getSourceLocation();
         void setSourceLocation(std::string);
         void clear();
-        void replace(Node *, Node *);
         static int getNodeNumber();
         virtual Node *copy() = 0;
         void setParents();
+        void setParent(ir::Node *);
 };
 
 class Expr : public Node {
@@ -90,6 +90,22 @@ class UnaryExpr : public Expr {
         virtual Node *copy();
 };
 
+class Symbol;
+class DiffExpr : public Expr {
+    protected:
+        std::string order;
+
+    public:
+        DiffExpr(Expr *, Identifier *, std::string order = std::string("1"),
+                Node *p = NULL);
+        Expr *getExpr();
+        Identifier *getVar();
+        void setOrder(std::string);
+        std::string getOrder();
+        virtual void dump(std::ostream&) const;
+        virtual Node *copy();
+};
+
 class ExprLst : public std::vector<Expr *> {
 };
 
@@ -135,6 +151,9 @@ class DeclLst : public std::list<Decl *> {
 
 class BCLst;
 class Equation : public Node {
+    protected:
+        std::string name;
+
     public:
         Equation(Expr *lhs, Expr *rhs, BCLst *bc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
@@ -142,18 +161,27 @@ class Equation : public Node {
         Expr *getRHS();
         BCLst *getBCs();
         virtual Node *copy();
+        void setName(std::string&);
+        std::string& getName();
+        void setBCs(ir::BCLst *);
 };
 
 class EqLst : public std::list<Equation *> {
 };
 
 class BC : public Node {
+    protected:
+        int eqLoc;  // this encodes the place to set the BC in the linear system
+                    // (i.e, the line in the matrix)
+
     public:
         BC(Equation *cond, Equation *loc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
         Equation *getLoc();
         Equation *getCond();
+        void setEqLoc(int);
+        int getEqLoc();
 };
 
 class BCLst : public std::list<BC *> {
@@ -172,6 +200,8 @@ class Program : public DOT {
         SymTab *getSymTab();
         EqLst *getEqs();
         DeclLst *getDecls();
+
+        void replace(Node *, Node *);
 };
 
 class IndexRange : public BinExpr {
@@ -221,6 +251,16 @@ class Function : public Symbol {
         int nparams;
     public:
         Function(std::string n, int nparams);
+};
+
+class Field : public Symbol {
+    public:
+        Field(std::string n);
+};
+
+class Scalar : public Symbol {
+    public:
+        Scalar(std::string n);
 };
 
 }

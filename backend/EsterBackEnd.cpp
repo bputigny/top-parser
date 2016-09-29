@@ -66,14 +66,14 @@ void EsterBackEnd::writeAddBCTerm(std::ostream& os, std::string eq,
             err() << "I can only add terms! (i.e., products)\n";
             exit(EXIT_FAILURE);
         }
-        ir::Expr *l = be->getLeftOp();
-        ir::Expr *r = be->getRightOp();
+        // ir::Expr *l = be->getLeftOp();
+        // ir::Expr *r = be->getRightOp();
         if (auto *id = dynamic_cast<ir::Identifier *>(be)) {
             if (id->getName() == "D") {
-                ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(be);
+                // ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(be);
                 assert(fc);
                 assert(fc->getArgs()->size() == 1);
-                ir::Expr *arg = (*fc->getArgs())[0];
+                // ir::Expr *arg = (*fc->getArgs())[0];
                 // if (auto )
             }
         }
@@ -449,7 +449,7 @@ std::string EsterBackEnd::eqName(ir::Equation *e) {
 
 void EsterBackEnd::emitEquations(std::ostream& os) {
     int n = 0;
-    SymTab *symTab = prog->getSymTab();
+    // SymTab *symTab = prog->getSymTab();
 
     os << "\n";
     os << "    //=====   equations   =====\n";
@@ -472,7 +472,7 @@ void EsterBackEnd::emitEquations(std::ostream& os) {
 
 void EsterBackEnd::emitFillOp(std::ostream& os) {
     int n = 0;
-    SymTab *symTab = prog->getSymTab();
+    // SymTab *symTab = prog->getSymTab();
 
     os << "        op.reset();\n";
 
@@ -604,7 +604,7 @@ void EsterBackEnd::emitExpr(std::ostream& os, ir::Expr *e) {
         os << ")";
     }
     else if (ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(e)) {
-        int i = 0;
+        unsigned int i = 0;
         ir::ExprLst *args = fc->getArgs();
         os << fc->getName() << "(";
         for (auto arg:*args) {
@@ -616,7 +616,7 @@ void EsterBackEnd::emitExpr(std::ostream& os, ir::Expr *e) {
         os << ")";
         delete(args);
     }
-    else if (ir::ArrayExpr *ea = dynamic_cast<ir::ArrayExpr *>(e)) {
+    else if (dynamic_cast<ir::ArrayExpr *>(e)) {
         err() << "skipped non implemented ArrayExpr for " << *e << "\n";
     }
     else if (ir::Identifier *id = dynamic_cast<ir::Identifier *>(e)) {

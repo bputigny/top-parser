@@ -58,14 +58,14 @@ extern std::string *filename;
 %token <num> NUM
 %token <str> ID KW_TYPE
 
-%token KW_LET KW_IN KW_WITH KW_AT
-%token KW_PARAM KW_VAR KW_LAMBDA
+%token KW_LET KW_IN KW_WITH KW_AT KW_EQ
+%token KW_PARAM KW_VAR KW_LAMBDA KW_FIELD KW_SCAL
 
 %type<expr> expr primary_expr postfix_expr unary_expr factor const
 
 %type<bc> bc
 %type<decl> declaration
-%type<eq> equation equation_with_bc
+%type<eq> equation_def equation equation_with_bc
 %type<indexRange> index
 %type<op> unary_operator
 
@@ -79,8 +79,8 @@ extern std::string *filename;
 %%
 
 program
-: KW_LET declaration_list KW_IN equation_list
-                                    { $$ = new ir::Program(progParams, $2, $4);
+: declaration_list KW_IN equation_list
+                                    { $$ = new ir::Program(progParams, $1, $3);
                                       prog = $$;
                                     }
 ;
@@ -92,8 +92,8 @@ declaration_list
 ;
 
 equation_list
-: equation_list equation_with_bc    { $$ = $1; $$->push_back($2); }
-| equation_with_bc                  { $$ = new ir::EqLst();
+: equation_list equation_def        { $$ = $1; $$->push_back($2); }
+| equation_def                      { $$ = new ir::EqLst();
 ;                                     $$->push_back($1); }
 
 bc_list
@@ -116,6 +116,16 @@ param_list
 | KW_VAR var_names                  { if (progParams == NULL) progParams = new SymTab();
                                       for (auto n: *$2) {
                                           progParams->add(new ir::Variable(*n));
+                                      }
+                                    }
+| KW_FIELD var_names                { if (progParams == NULL) progParams = new SymTab();
+                                      for (auto n: *$2) {
+                                          progParams->add(new ir::Field(*n));
+                                      }
+                                    }
+| KW_SCAL var_names                 { if (progParams == NULL) progParams = new SymTab();
+                                      for (auto n: *$2) {
+                                          progParams->add(new ir::Scalar(*n));
                                       }
                                     }
 ;
@@ -177,7 +187,7 @@ postfix_expr
 
 primary_expr
 : ID                                { $$ = new ir::Identifier($1); }
-| KW_LAMBDA                         { $$ = new ir::Identifier("\\"); }
+| KW_LAMBDA                         { $$ = new ir::Identifier("fp"); }
 | const                             { $$ = $1; }
 | '(' expr ')'                      { $$ = $2; }
 ;
@@ -217,12 +227,21 @@ equation
 : expr '=' expr                     { $$ = new ir::Equation($1, $3, NULL); }
 ;
 
+equation_def
+: KW_EQ ID ':' equation_with_bc     { $$ = $4; $$->setName(*$2); }
+;
+
 equation_with_bc
-: expr '=' expr bc_list             { $$ = new ir::Equation($1, $3, $4); }
+: equation bc_list                  { $$ = $1; $$->setBCs($2); }
+| equation                          { $$ = $1; }
 ;
 
 bc
-: KW_WITH equation KW_AT equation   { $$ = new ir::BC($2, $4); }
+: KW_WITH '(' ID '=' const ')' equation KW_AT equation
+                                    {
+                                      $$ = new ir::BC($7, $9);
+                                      $$->setEqLoc((int)((ir::Value<int> *)$5)->getValue());
+                                    }
 ;
 
 %%

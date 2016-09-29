@@ -1,0 +1,169 @@
+param int m
+param int lres
+param int iparity
+param double rota # f8.6
+param int lmod # I3
+param int lmax # I3
+param int iCor # I1
+param double pindex
+
+param double Gamma1, gamma_p, pder, uder
+
+var B, u, v, Pi, Phi, Phie, w
+
+field zeta, sint, hh, r_map, r_z, hht, r_t, hhz,
+        cost, lnhht, r_zt, r_zz, r_tt,
+        cott, re_map, re_t, re_z, re_zt, re_zz,
+        re_tt, hhzz
+scalar omga, aplat, lambda
+
+lvar(B)     = abs(m) + iparity
+lvar(u)     = abs(m) + iparity
+lvar(v)     = abs(m) + iparity
+lvar(Pi)    = abs(m) + iparity
+lvar(Phi)   = abs(m) + iparity
+lvar(Phie)  = abs(m) + iparity
+lvar(w)     = abs(m) + 1 - iparity
+
+leq(eqB)    = abs(m) + iparity
+leq(equ)    = abs(m) + iparity
+leq(eqv)    = abs(m) + iparity
+leq(eqPi)   = abs(m) + iparity
+leq(eqPhi)  = abs(m) + iparity
+leq(eqPhie) = abs(m) + iparity
+leq(eqw)    = abs(m) + 1 - iparity
+
+Gamma1 = 5.0/3.0
+gamma_p = 1.0 + 1.0/pindex
+
+pder = modulo(abs(m)+iparity+1, 2)
+uder = modulo(abs(m)+iparity, 2)
+
+lmax = maxval(lvar)
+
+# zeta(1, :) = 1d0   # add-hoc instructions to avoid divisions by zero
+# r_map(1, :) = 1d0  # add-hoc instructions to avoid divisions by zero
+
+in
+
+# eqB
+equation eqB:
+fp*B =
+    Illm(-zeta^2 * hh / (r_map^2 * r_z))                * u'+
+    Illm((-2*zeta*hh-zeta^2*pindex*hhz)/(r_map^2*r_z))  * u +
+    Illm(l'*(l'+1)*zeta*hh/(r_map^2*r_z))               * v +
+    Jllm(-zeta*pindex*hht/(r_map^2*r_z))                * v +
+    Kllm(-zeta*pindex*hht/(r_map^2*r_z))                * w
+with (r=0)
+    dr(B, pder) = 0 at r = 0
+
+
+# equ
+equation equ:
+0 =
+    fp * Illm(zeta^2*r_z*hh/r_map^2)        * u +
+    fp * Jllm(zeta*r_t*hh/r_map^2)          * v +
+    fp * Kllm(zeta*r_t*hh/r_map^2)          * w +
+         Kllm(-2*omga*hh*zeta*sint/r_map)   * v +
+         Jllm(-2*omga*hh*zeta*sint/r_map)   * w +
+         Illm(-hh)                          * Pi' +
+         Illm(-pindex*hhz)                  * Pi +
+         Illm(-hh)                          * Phi' +
+         Illm(hhz/lambda)                   * B
+with (r = 0)
+    dr(u, uder) = 0 at r = 0
+with (r = 1)
+    fp * Illm(zeta^2 * r_z * hhz / r_map^2)    * u +
+    fp * Jllm(zeta * r_t * hhz / r_map^2)      * v +
+    fp * Kllm(zeta * r_t * hhz / r_map^2)       * w +
+    Kllm(-2*omga * hhz * zeta * sint / r_map)   * v +
+    Jllm(-2*omga * hhz * zeta * sint /r_map)    * w +
+    Illm(-(pindex+1)*hhz)                       * Pi' +
+    Illm(-pindex*hhzz)                          * Pi +
+    Illm(-hhz)                                  * Phi' +
+    Illm(hhzz/lambda)                           * B +
+    Illm(hhz/lambda)                            * B' = 0
+        at r = 1
+
+# eqv
+equation eqv:
+0 =
+    fp * Jllmc(zeta*r_t/r_map^2)                        * u +
+    fp * Lllm((r_map^2+r_t^2)/(r_map^2*r_z))            * v +
+         # instruction call modify_l0($prev,abs(m)+iparity)
+    fp * Nllm(1.0/r_z)                                  * v +
+    fp * Mllm((r_map^2+r_t^2)/(r_map^2*r_z))            * w +
+    fp * Mllmc(-1.0/r_z)                                * w +
+    Kllmc(2.0*omga*zeta*sint/r_map)                     * u +
+    Mllm(-2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))   * v +
+    Mllmc(2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))   * v +
+    Lllm(-2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))   * w +
+    Nllm(-2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))   * w +
+    Lllm(-1.0/zeta)                                     * Pi +
+    Nllm(-1.0/zeta)                                     * Pi +
+    Jllmc(-pindex*lnhht/zeta)                           * Pi +
+    Lllm(-1.0/zeta)                                     * Phi +
+    Nllm(-1.0/zeta)                                     * Phi +
+    Jllmc(lnhht/(lambda*zeta))                          * B
+with (r=0)
+    dr(v, uder) = 0 at r = 0
+
+# eqw
+equation eqw:
+0 =
+    fp * Kllmc(zeta*r_t/r_map^2)                        * u +
+    fp * Mllmc((r_map^2+r_t^2)/(r_map^2*r_z))           * v +
+    fp * Mllm(-1.0/r_z)                                 * v +
+    fp * Nllm(-(r_map^2+r_t^2)/(r_map^2*r_z))           * w +
+    fp * Lllm(-1.0/r_z)                                 * w +
+    # instruction call modify_l0($prev,abs(m)+1-iparity)
+    Jllmc(2.0*omga*zeta*sint/r_map)                     * u +
+    Lllm(2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))    * v +
+    Nllm(2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))    * v +
+    Mllm(2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))    * w +
+    Mllmc(-2.0*omga*(r_t*sint+r_map*cost)/(r_map*r_z))  * w +
+    Mllm(1.0/zeta)                                      * Pi +
+    Mllmc(-1.0/zeta)                                    * Pi +
+    Kllmc(-pindex*lnhht/zeta)                           * Pi +
+    Mllm(1.0/zeta)                                      * Phi +
+    Mllmc(-1.0/zeta)                                    * Phi +
+    Kllmc(lnhht/(lambda*zeta))                          * B
+with (r=0)
+    dr(w, uder) = 0 at r = 0
+
+# eqPi
+equation eqPi:
+fp*Pi =
+    fp * Gamma1/((pindex+1.0)*lambda)                               * B +
+         Illm((Gamma1/gamma_p-1.0)*zeta^2*hhz/(lambda*r_map^2*r_z)) * u +
+         Jllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * v +
+         Kllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * w
+with (r=0)
+    dr(Pi, uder) = 0 at r = 0
+
+# eqPhi
+equation eqPhi:
+0 =
+    Illm((r_map^2+r_t^2)/r_z^2) * Phi'' +
+    Illm((2.0*r_z*r_t*r_zt-r_map^2*r_zz-r_z^2*r_tt+2.0*r_map*r_z^2-r_t^2*r_zz-r_z^2*r_t*cott)/r_z^3) * Phi' +
+    Jllm(-2.0*r_t/r_z) * Phi' +
+    -(l*(l+1)) * Phi +
+    Illm(-r_map^2*hh^(pindex-1.0)) * B
+with (r=0)
+    dr(Phi, pder) = 0 at r = 0
+with (r=1)
+    Phi = Phie at r = 1
+
+# eqPhie
+equation eqPhie:
+0 =
+    Illm((re_map^2+re_t^2)/re_z^2) * Phie'' +
+    Illm((2.0*re_z*re_t*re_zt-re_map^2*re_zz-re_z^2*re_tt+2.0*re_map*re_z^2-re_t^2*re_zz-re_z^2*re_t*cott)/re_z^3) * Phie' +
+    Jllm(-2.0*re_t/re_z) * Phie' -
+    (l*(l+1)) * Phie
+with (r=0)
+    1/(aplat-1) * Phie' +
+    (l+1)/2 * Phie = 0
+        at r = 0
+with (r=1)
+    Phi' + Phie' = 0 at r = 1

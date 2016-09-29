@@ -10,6 +10,31 @@
 
 namespace ir {
 
+void Program::replace(Node *n0, Node *n1) {
+    // TODO: check derived types of n0 and n1 are compatible (e.g. do not
+    // replace an equation with an expression)
+
+    assert(n0);
+    assert(n1);
+
+    std::function<void (ir::Node *)> replaceNode = [n0, n1, &replaceNode] (ir::Node *n) {
+        assert(n);
+        for (auto c: n->getChildren()) {
+            assert(c);
+            replaceNode(c);
+            c->setParent(n);
+        }
+        std::replace(n->getChildren().begin(), n->getChildren().end(), n0, n1);
+    };
+
+    for (auto e: *this->getEqs()) {
+        replaceNode(e);
+        for (auto bc: *e->getBCs()) {
+            replaceNode(bc);
+        }
+    }
+}
+
 int Node::nNode = 0;
 
 int Node::getNodeNumber() {
@@ -17,7 +42,7 @@ int Node::getNodeNumber() {
 }
 
 Node::Node(Node *p) : children() {
-    nNode ++;
+    nNode++;
     parent = p;
     srcLoc = "unknown";
 }
@@ -28,6 +53,10 @@ Node *Node::getParent() {
 
 void Node::dump(std::ostream& os) const {
     os << "Node " << (this);
+}
+
+void Node::setParent(ir::Node *p) {
+    this->parent = this;
 }
 
 void Node::setParents() {
@@ -76,17 +105,13 @@ std::string Node::getSourceLocation() {
 void Node::clear() {
     for(auto c: children) {
         c->clear();
-        delete(c);
+        delete c;
     }
     children.clear();
 }
 
 Node::~Node() {
-    nNode --;
-}
-
-void Node::replace(Node *child, Node *with) {
-    std::replace(children.begin(), children.end(), child, with);
+    nNode--;
 }
 
 Program::Program(SymTab *symTab, DeclLst *decls, EqLst *eqs) {
@@ -217,6 +242,36 @@ Node *UnaryExpr::copy() {
     return new UnaryExpr(l, op);
 }
 
+DiffExpr::DiffExpr(Expr *expr, Identifier *id, std::string order, Node *p) : Expr(p) {
+    this->children.push_back(expr);
+    this->children.push_back(id);
+    this->order = order;
+}
+
+Expr *DiffExpr::getExpr() {
+    return dynamic_cast<Expr *>(this->children[0]);
+}
+
+Identifier *DiffExpr::getVar() {
+    return dynamic_cast<Identifier *>(this->children[1]);
+}
+
+void DiffExpr::setOrder(std::string order) {
+    this->order = order;
+}
+
+std::string DiffExpr::getOrder() {
+    return order;
+}
+
+Node *DiffExpr::copy() {
+    Expr *e = dynamic_cast<Expr *>(getExpr()->copy());
+    Identifier *i = dynamic_cast<Identifier *>(getVar()->copy());
+    DiffExpr *ret = new DiffExpr(e, i);
+    ret->setOrder(this->getOrder());
+    return ret;
+}
+
 Identifier::Identifier(std::string *n, Node *p) : Expr(p), name(*n) { }
 
 Identifier::Identifier(std::string n, Node *p) :  Identifier(&n, p) { }
@@ -230,10 +285,7 @@ Node *Identifier::copy() {
 }
 
 void Identifier::dump(std::ostream& os) const {
-    if (name == "\\")
-        os << "ID: \\\\lambda";
-    else
-        os << "ID: " << name;
+    os << "ID: " << name;
 }
 
 Decl::Decl(Expr *lhs, Expr *rhs) {
@@ -259,7 +311,7 @@ Node *Decl::copy() {
     return new Decl(r, l);
 }
 
-Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p) {
+Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p), name("undef") {
     children.push_back(lhs);
     children.push_back(rhs);
     if (bcs) {
@@ -267,6 +319,17 @@ Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p) {
             children.push_back(bc);
         }
     }
+}
+
+void Equation::setName(std::string& name) {
+    this->name = name;
+}
+
+std::string& Equation::getName() {
+    return this->name;
+}
+
+void Equation::setBCs(ir::BCLst *) {
 }
 
 void Equation::dump(std::ostream& os) const {
@@ -295,7 +358,9 @@ Node *Equation::copy() {
     Expr *l = dynamic_cast<Expr *>(getLHS());
     Expr *r = dynamic_cast<Expr *>(getRHS());
     BCLst *bcs = getBCs();
-    return new Equation(l, r, bcs);
+    ir::Equation *ret = new Equation(l, r, bcs);
+    ret->setName(this->name);
+    return ret;
 }
 
 BC::BC(Equation *cond, Equation *loc, Node *p) : Node(p) {
@@ -319,6 +384,14 @@ Equation *BC::getLoc() {
 
 Equation *BC::getCond() {
     return dynamic_cast<Equation *>(children[0]);
+}
+
+void BC::setEqLoc(int loc) {
+    this->eqLoc = loc;
+}
+
+int BC::getEqLoc() {
+    return this->eqLoc;
 }
 
 FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, p) {
@@ -374,6 +447,10 @@ Expr *IndexRange::getLB() {
 
 Expr *IndexRange::getUB() {
     return dynamic_cast<Expr *>(children[1]);
+}
+
+void DiffExpr::dump(std::ostream &os) const {
+    os << "Diff (order: " << this->order << ")";
 }
 
 }

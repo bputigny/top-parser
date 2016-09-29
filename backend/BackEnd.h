@@ -6,9 +6,28 @@
 
 #include <iostream>
 
+class Output {
+    std::ostream& os;
+    int lineLen;
+
+    void checkLineLen();
+
+    public:
+        Output(std::ostream&);
+
+        Output& operator<<(const char *);
+        Output& operator<<(const char);
+        Output& operator<<(std::string);
+        Output& operator<<(float);
+        Output& operator<<(int);
+        Output& operator<<(unsigned long);
+
+        ~Output();
+};
+
 class BackEnd {
     public:
-        virtual void emitCode(std::ostream &os) = 0;
+        virtual void emitCode(Output& of) = 0;
 };
 
 #endif

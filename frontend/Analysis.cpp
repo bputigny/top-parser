@@ -2,15 +2,17 @@
 
 #include <cassert>
 
-std::vector<ir::Identifier *> getIds(ir::Expr *e) {
+std::vector<ir::Identifier *> getIds(ir::Expr *e, bool uniq) {
     std::vector<ir::Identifier *> ret;
     Analysis<ir::Identifier> a;
-    auto addIdentifiers = [&ret] (ir::Identifier *id) {
+    auto addIdentifiers = [&ret, &uniq] (ir::Identifier *id) {
         bool add = true;
         // check if id is already in ret
-        for (auto i: ret) {
-            if (i->getName() == id->getName())
-                add = false;
+        if (uniq) {
+            for (auto i: ret) {
+                if (i->getName() == id->getName())
+                    add = false;
+            }
         }
         if (add)
             ret.push_back(id);
@@ -18,4 +20,3 @@ std::vector<ir::Identifier *> getIds(ir::Expr *e) {
     a.run(addIdentifiers, e);
     return ret;
 }
-

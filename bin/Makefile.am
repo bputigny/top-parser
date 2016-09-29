@@ -2,12 +2,12 @@ AM_CXXFLAGS = -I$(srcdir)/.. -I$(srcdir)/../ir -I$(srcdir)/../frontend \
 			  -I$(srcdir)/../utils -I$(builddir)/../frontend \
 			  -I$(srcdir)/../backend
 
-bin_PROGRAMS = edl-ester edl-top
+bin_PROGRAMS = edl-top # edl-ester
 
-edl_ester_SOURCES = edl-ester.cpp
-edl_ester_LDADD = ../ir/libir.la ../frontend/libparser.la \
-				  ../backend/libester-backend.la \
-				  ../utils/libutils.la
+# edl_ester_SOURCES = edl-ester.cpp
+# edl_ester_LDADD = ../ir/libir.la ../frontend/libparser.la \
+# 				  ../backend/libester-backend.la \
+# 				  ../utils/libutils.la
 
 edl_top_SOURCES = edl-top.cpp
 edl_top_LDADD = ../ir/libir.la ../frontend/libparser.la \

@@ -30,7 +30,7 @@ class Analysis {
         }
 };
 
-std::vector<ir::Identifier *> getIds(ir::Expr *e);
+std::vector<ir::Identifier *> getIds(ir::Expr *e, bool uniq=true);
 
 // ir::Expr *factorize(ir::Expr *);
 // ir::Expr *expand(ir::Expr *);

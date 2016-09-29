@@ -14,7 +14,7 @@ void SymTab::add(ir::Symbol *s) {
     if (this->search(s->getName()) == NULL)
         std::list<ir::Symbol *>::push_back(s);
     else
-        err() << s->getName() << " already defined";
+        err() << s->getName() << " already defined\n";
 }
 
 ir::Symbol *SymTab::search(ir::Identifier *id) const {

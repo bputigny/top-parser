@@ -23,7 +23,11 @@ SPACE		[ \t]
 "#"             { comment = 1; }
 "fp"            { if (!comment) { return KW_LAMBDA;} }
 "let"           { if (!comment) { return KW_LET;} }
+"equation"      { if (!comment) { return KW_EQ;} }
 "param"         { if (!comment) { return KW_PARAM;} }
+"var"           { if (!comment) { return KW_VAR;} }
+"field"         { if (!comment) { return KW_FIELD;} }
+"scalar"        { if (!comment) { return KW_SCAL;} }
 "var"           { if (!comment) { return KW_VAR;} }
 "in"            { if (!comment) { return KW_IN;} }
 "with"          { if (!comment) { return KW_WITH;} }

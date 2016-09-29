@@ -39,4 +39,10 @@ Function::Function(std::string name, int nparams) :
         this->nparams = nparams;
 }
 
+Field::Field(std::string name) :
+    Symbol(name, NULL, false) {}
+
+Scalar::Scalar(std::string name) :
+    Symbol(name, NULL, false) {}
+
 }
