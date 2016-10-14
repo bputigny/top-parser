@@ -16,16 +16,17 @@ class Printer {
     int level;
 
     public:
-        Printer(const std::string&, std::ostream&, int level);
         static int verbosity;
+        static void init(int verbosity = 1);
+
+        Printer(const std::string&, std::ostream&, int level);
         ~Printer();
-        static void init(int verbosity = 0);
         std::ostream& stream();
-        void print();
+
+        std::ostream& operator<<(std::string&);
+        std::ostream& operator<<(const char *);
 };
 
-std::ostream& err();
-std::ostream& log();
-std::ostream& warn();
+extern Printer err, log, warn;
 
 #endif // PRINTER_H

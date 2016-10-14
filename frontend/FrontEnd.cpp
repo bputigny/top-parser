@@ -19,7 +19,7 @@ ir::Program *FrontEnd::parse(std::string &file) {
     filename = &file;
     yyin = fopen(file.c_str(), "r");
     if (!yyin) {
-        err() << "cannot open input file `" << file << "'\n";
+        err << "cannot open input file `" << file << "'\n";
     }
     yyparse();
     return prog;

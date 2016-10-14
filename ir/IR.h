@@ -39,6 +39,11 @@ class Node : public DOT {
         virtual Node *copy() = 0;
         void setParents();
         void setParent(ir::Node *);
+
+        bool contains(ir::Node&);
+
+        virtual bool operator==(ir::Node&) = 0;
+        virtual bool operator!=(ir::Node&);
 };
 
 class Expr : public Node {
@@ -63,6 +68,15 @@ class Value : public Expr {
         virtual inline Node *copy() {
             return new Value<T>(value);
         }
+        inline bool operator==(Node& node) {
+            try {
+                Value& v = dynamic_cast<Value<T>&>(node);
+                return value == v.value;
+            }
+            catch (std::bad_cast) {
+                return false;
+            }
+        }
 };
 
 class BinExpr : public Expr {
@@ -76,6 +90,7 @@ class BinExpr : public Expr {
         char getOp();
         virtual void dump(std::ostream&) const;
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class UnaryExpr : public Expr {
@@ -88,6 +103,7 @@ class UnaryExpr : public Expr {
         char getOp() const;
         virtual void dump(std::ostream&) const;
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class Symbol;
@@ -104,6 +120,7 @@ class DiffExpr : public Expr {
         std::string getOrder();
         virtual void dump(std::ostream&) const;
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class ExprLst : public std::vector<Expr *> {
@@ -119,6 +136,7 @@ class Identifier : public Expr {
         std::string getName();
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class FuncCall : public Identifier {
@@ -128,6 +146,7 @@ class FuncCall : public Identifier {
         virtual void dump(std::ostream& os) const;
         ExprLst *getArgs();
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class ArrayExpr : public Identifier {
@@ -135,15 +154,22 @@ class ArrayExpr : public Identifier {
         ArrayExpr(std::string name, ExprLst *indices, Node *p = NULL);
         ExprLst *getIndices();
         virtual Node *copy();
+        bool operator==(Node&);
 };
 
 class Decl : public Node {
+    /// this flag tells whether the declaration have a degree l = 0
+    /// this obviously only makes sense for lvar(variable) declaration
+    bool noLM0;
+
     public:
-        Decl(Expr *, Expr *);
+        Decl(Expr *, Expr *, bool = false);
         Expr *getLHS();
         Expr *getDef();
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
+        bool operator==(Node&);
+        bool getLM0();
 };
 
 class DeclLst : public std::list<Decl *> {
@@ -161,6 +187,7 @@ class Equation : public Node {
         Expr *getRHS();
         BCLst *getBCs();
         virtual Node *copy();
+        bool operator==(Node&);
         void setName(std::string&);
         std::string& getName();
         void setBCs(ir::BCLst *);
@@ -178,6 +205,7 @@ class BC : public Node {
         BC(Equation *cond, Equation *loc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
+        bool operator==(Node&);
         Equation *getLoc();
         Equation *getCond();
         void setEqLoc(int);

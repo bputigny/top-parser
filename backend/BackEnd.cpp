@@ -3,10 +3,12 @@
 #include <cstring>
 
 void Output::checkLineLen() {
+#if 1
     if (lineLen > 60) {
         os << " &\n\t& ";
         lineLen = strlen("\t& ");
     }
+#endif
 }
 
 Output::Output(std::ostream& os) : os(os) {

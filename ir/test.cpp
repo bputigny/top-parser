@@ -83,5 +83,28 @@ int main() {
 
     }
 
+#if 1
+    ir::Value<int> i0 = ir::Value<int>(0);
+    ir::Value<int> i1 = ir::Value<int>(0);
+    ir::Value<float> f0 = ir::Value<float>(0);
+
+    ir::Identifier id("id");
+    ir::Identifier l("l");
+    ir::Identifier id2("id");
+
+    ir::UnaryExpr ll(new ir::Identifier("l"), '\'');
+    ir::UnaryExpr ll2(new ir::Identifier("l"), '\'');
+    ir::UnaryExpr ll3(new ir::Identifier("ll"), '\'');
+
+    std::cout << "0.0 == 0: " << (i0 == f0) << "\n";
+    std::cout << "0 == 0: " << (i0 == i1) << "\n";
+    std::cout << "id == id2: " << (id == id2) << "\n";
+    std::cout << "id == l: " << (id == l) << "\n";
+
+    std::cout << "l' == l': " << (ll == ll2) << "\n";
+    std::cout << "l' == l': " << (ll == ll3) << "\n";
+
+#endif
+
     return 0;
 }

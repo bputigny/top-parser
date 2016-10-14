@@ -5,6 +5,7 @@ param double rota # f8.6
 param int lmod # I3
 param int lmax # I3
 param int iCor # I1
+param int orderFD
 param double pindex
 
 param double Gamma1, gamma_p, pder, uder
@@ -19,11 +20,11 @@ scalar omga, aplat, lambda
 
 lvar(B)     = abs(m) + iparity
 lvar(u)     = abs(m) + iparity
-lvar(v)     = abs(m) + iparity
+lvar(v)     = abs(m) + iparity no_lm0
 lvar(Pi)    = abs(m) + iparity
 lvar(Phi)   = abs(m) + iparity
 lvar(Phie)  = abs(m) + iparity
-lvar(w)     = abs(m) + 1 - iparity
+lvar(w)     = abs(m) + 1 - iparity no_lm0
 
 leq(eqB)    = abs(m) + iparity
 leq(equ)    = abs(m) + iparity
@@ -48,7 +49,8 @@ in
 
 # eqB
 equation eqB:
-fp*B =
+ 0 =
+    -fp                                                 * B  +
     Illm(-zeta^2 * hh / (r_map^2 * r_z))                * u'+
     Illm((-2*zeta*hh-zeta^2*pindex*hhz)/(r_map^2*r_z))  * u +
     Illm(l'*(l'+1)*zeta*hh/(r_map^2*r_z))               * v +
@@ -133,13 +135,14 @@ with (r=0)
 
 # eqPi
 equation eqPi:
-fp*Pi =
-    fp * Gamma1/((pindex+1.0)*lambda)                               * B +
+0 =
+    fp * Gamma1/((pindex+1.0)*lambda)                               * B -
+    fp                                                              * Pi +
          Illm((Gamma1/gamma_p-1.0)*zeta^2*hhz/(lambda*r_map^2*r_z)) * u +
          Jllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * v +
          Kllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * w
 with (r=0)
-    dr(Pi, uder) = 0 at r = 0
+    dr(Pi, pder) = 0 at r = 0
 
 # eqPhi
 equation eqPhi:

@@ -10,6 +10,21 @@
 
 namespace ir {
 
+bool Node::operator!=(Node& n) {
+    return !((*this) == n);
+}
+
+bool Node::contains(ir::Node& node) {
+    if (*this == node) {
+        return true;
+    }
+    for (auto c: this->getChildren()) {
+        if (c->contains(node))
+            return true;
+    }
+    return false;
+}
+
 void Program::replace(Node *n0, Node *n1) {
     // TODO: check derived types of n0 and n1 are compatible (e.g. do not
     // replace an equation with an expression)
@@ -31,6 +46,12 @@ void Program::replace(Node *n0, Node *n1) {
         replaceNode(e);
         for (auto bc: *e->getBCs()) {
             replaceNode(bc);
+        }
+    }
+    for (auto e: *this->getEqs()) {
+        e->setParents();
+        for (auto bc: *e->getBCs()) {
+            e->setParents();
         }
     }
 }
@@ -129,7 +150,7 @@ void Program::buildSymTab() {
             symTab->add(var);
         }
         else {
-            err() << "affecting expression to non variable type\n";
+            err << "affecting expression to non variable type\n";
         }
     }
 
@@ -139,7 +160,7 @@ void Program::buildSymTab() {
         auto checkDefined = [this] (ir::Identifier *s) -> void {
             std::string name = s->getName();
             if (this->symTab->search(name) == NULL)
-                err() << "undefined symbol: `" << name << "'\n";
+                err << "undefined symbol: `" << name << "'\n";
         };
         a.run(checkDefined, e);
     }
@@ -220,6 +241,19 @@ char BinExpr::getOp() {
     return op;
 }
 
+bool BinExpr::operator==(Node& n) {
+    try {
+        BinExpr& be = dynamic_cast<BinExpr&>(n);
+        return this->getOp() == be.getOp() &&
+            this->getLeftOp() == be.getLeftOp() &&
+            this->getRightOp() == be.getRightOp();
+
+    }
+    catch (std::bad_cast) {
+        return false;
+    }
+}
+
 UnaryExpr::UnaryExpr(Expr *expr, char op, Node *p) : Expr(p) {
     children.push_back(expr);
     this->op = op;
@@ -237,6 +271,17 @@ void UnaryExpr::dump(std::ostream& os) const {
     os << op; // << *this->getExpr();
 }
 
+bool UnaryExpr::operator==(Node& n) {
+    try {
+        UnaryExpr& ue = dynamic_cast<UnaryExpr&>(n);
+        return getOp() == ue.getOp() &&
+            *this->getExpr() == *ue.getExpr();
+    }
+    catch (std::bad_cast) {
+        return false;
+    }
+}
+
 Node *UnaryExpr::copy() {
     Expr *l = dynamic_cast<Expr *>(getExpr()->copy());
     return new UnaryExpr(l, op);
@@ -250,6 +295,18 @@ DiffExpr::DiffExpr(Expr *expr, Identifier *id, std::string order, Node *p) : Exp
 
 Expr *DiffExpr::getExpr() {
     return dynamic_cast<Expr *>(this->children[0]);
+}
+
+bool DiffExpr::operator==(Node& n) {
+    try {
+        DiffExpr& de = dynamic_cast<DiffExpr&>(n);
+        return *this->getVar() == *de.getVar() &&
+            *this->getExpr() == *de.getExpr() &&
+            this->getOrder() == de.getOrder();
+    }
+    catch (std::bad_cast) {
+        return false;
+    }
 }
 
 Identifier *DiffExpr::getVar() {
@@ -288,13 +345,33 @@ void Identifier::dump(std::ostream& os) const {
     os << "ID: " << name;
 }
 
-Decl::Decl(Expr *lhs, Expr *rhs) {
+bool Identifier::operator==(Node& n) {
+    try {
+        Identifier& id = dynamic_cast<Identifier&>(n);
+        return this->getName() == id.getName();
+    }
+    catch (std::bad_cast) {
+        return false;
+    }
+}
+
+Decl::Decl(Expr *lhs, Expr *rhs, bool noLM0) {
     children.push_back(lhs);
     children.push_back(rhs);
+    this->noLM0 = noLM0;
+}
+
+bool Decl::getLM0() {
+    return noLM0;
 }
 
 void Decl::dump(std::ostream& os) const {
     os << ":=";
+}
+
+bool Decl::operator==(Node& n) {
+    err << "not yet implemented\n";
+    return false;
 }
 
 Expr *Decl::getLHS() {
@@ -329,7 +406,10 @@ std::string& Equation::getName() {
     return this->name;
 }
 
-void Equation::setBCs(ir::BCLst *) {
+void Equation::setBCs(ir::BCLst *bcs) {
+    for (auto b: *bcs) {
+        children.push_back(b);
+    }
 }
 
 void Equation::dump(std::ostream& os) const {
@@ -344,11 +424,18 @@ Expr *Equation::getRHS() {
     return dynamic_cast<Expr *>(children[1]);
 }
 
+bool Equation::operator==(Node& n) {
+    err << "not yet implemented\n";
+    return false;
+}
+
 BCLst *Equation::getBCs() {
     BCLst *bcs = new BCLst();
+    int n = 0;
     for (auto c: children) {
         if (auto bc = dynamic_cast<ir::BC *>(c)) {
             bcs->push_back(bc);
+            n ++;
         }
     }
     return bcs;
@@ -394,6 +481,11 @@ int BC::getEqLoc() {
     return this->eqLoc;
 }
 
+bool BC::operator==(Node& n) {
+    err << "not yet implemented\n";
+    return false;
+}
+
 FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, p) {
     for (auto c: *args) {
         children.push_back(c);
@@ -425,6 +517,26 @@ Node *FuncCall::copy() {
     return new FuncCall(name, args);
 }
 
+bool FuncCall::operator==(Node& n) {
+    try {
+        FuncCall& fc = dynamic_cast<FuncCall&>(n);
+        bool sameArgs;
+        if (this->getName() != fc.getName())
+            return false;
+        if (this->getArgs()->size() == fc.getArgs()->size())
+            sameArgs = true;
+        else
+            return false;
+        for (int i=0; i<this->getArgs()->size(); i++) {
+            sameArgs = sameArgs && this->getArgs()->at(i) == fc.getArgs()->at(i);
+        }
+        return sameArgs;
+    }
+    catch (std::bad_cast) {
+        return false;
+    }
+}
+
 ArrayExpr::ArrayExpr(std::string name, ExprLst *indices, Node *p) : Identifier(name, p) {
     for(auto c: *indices)
         children.push_back(c);
@@ -437,6 +549,11 @@ Node *ArrayExpr::copy() {
         idx->push_back(p);
     }
     return new ArrayExpr(name, idx);
+}
+
+bool ArrayExpr::operator==(Node& n) {
+    err << "not yet implemented\n";
+    return false;
 }
 
 IndexRange::IndexRange(Expr *lb, Expr *ub, Node *p) : BinExpr(lb, ':', ub, p) { }

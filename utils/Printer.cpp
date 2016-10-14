@@ -17,6 +17,22 @@ void Printer::init(int v) {
     Printer::verbosity = v;
 }
 
+std::ostream& Printer::operator<<(std::string& str) {
+    if (Printer::verbosity >= this->level) {
+        os << this->pref << str;
+        return this->os;
+    }
+    return devnull;
+}
+
+std::ostream& Printer::operator<<(const char *str) {
+    if (Printer::verbosity >= this->level) {
+        os << this->pref << str;
+        return this->os;
+    }
+    return devnull;
+}
+
 std::ostream& Printer::stream() {
     if (this->level > Printer::verbosity) {
         return devnull;
@@ -24,24 +40,6 @@ std::ostream& Printer::stream() {
     return os;
 }
 
-void Printer::print() {
-    stream() << pref;
-}
-
-Printer edl_err("[error]: ", std::cerr, 0);
-std::ostream& err() {
-    edl_err.print();
-    return edl_err.stream();
-}
-
-Printer edl_warn("[warning]: ", std::cerr, 1);
-std::ostream& warn() {
-    edl_warn.print();
-    return edl_warn.stream();
-}
-
-Printer edl_log("[log]: ", std::cerr, 2);
-std::ostream& log() {
-    edl_log.print();
-    return edl_log.stream();
-}
+Printer err("[error]: ",    std::cerr, 0);
+Printer warn("[warning]: ", std::cerr, 1);
+Printer log("[log]: ",      std::cerr, 2);

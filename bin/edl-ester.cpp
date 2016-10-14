@@ -54,7 +54,7 @@ int main (int argc, char* argv[]) {
             break;
         case 'o':
             if (!force && access(optarg, F_OK) != -1 ) {
-                err() << "File `" << optarg << "' already exists\n";
+                err << "File `" << *optarg << "' already exists\n";
             }
             outFileName = new std::string(optarg);
             break;
@@ -68,7 +68,7 @@ int main (int argc, char* argv[]) {
             filename = new std::string(argv[optind + nfile]);
             yyin = fopen(filename->c_str(), "r");
             if (!yyin) {
-                err() << "cannot open input file `" << filename << "'\n";
+                err << "cannot open input file `" << filename << "'\n";
             }
             nfile++;
         }
