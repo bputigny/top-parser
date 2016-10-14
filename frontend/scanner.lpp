@@ -29,7 +29,6 @@ SPACE		[ \t]
 "var"           { if (!comment) { return KW_VAR;} }
 "field"         { if (!comment) { return KW_FIELD;} }
 "scalar"        { if (!comment) { return KW_SCAL;} }
-"var"           { if (!comment) { return KW_VAR;} }
 "in"            { if (!comment) { return KW_IN;} }
 "with"          { if (!comment) { return KW_WITH;} }
 "at"            { if (!comment) { return KW_AT;} }
