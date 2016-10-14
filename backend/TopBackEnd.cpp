@@ -132,18 +132,68 @@ TermBC::TermBC(Term t) : Term(t.expr, NULL, t.var, t.power, t.der, t.ivar, t.var
     eqLoc = "1";
 }
 
-std::string Term::getMatrix() {
+std::string Term::getMatrixI() {
     switch (this->getType()) {
         case AS:
-            return "dm(1)\%as";
+            return "dm(1)\%asi";
         case ART:
-            return "dm(1)\%art";
+            return "dm(1)\%arti";
         case ARTT:
-            return "dm(1)\%artt";
+            return "dm(1)\%artti";
         case ATBC:
-            return "idm(1,1)\%atbc";
+            return "idm(1, 1)\%atbci";
         case ATTBC:
-            return "idm(1,1)\%attbc";
+            return "idm(1, 1)\%attbci";
+    }
+}
+
+std::string Term::getMatrix(IndexType it) {
+    std::string idx = std::to_string(this->idx);
+    switch (this->getType()) {
+        case AS:
+            if (it != FULL) {
+                err << "cannot access subscript of scalar terms\n";
+                    exit(EXIT_FAILURE);
+            }
+            return "dm(1)\%as(" + idx + ")";
+        case ART:
+            switch(it) {
+                case FULL:
+                    return "dm(1)\%art(1:grd(1)\%nr, 1:nt, " + idx + ")";
+                case T:
+                    return "dm(1)\%art(1:grd(1)\%nr, j, " + idx + ")";
+                default:
+                    err << "cannot access subscript of `ART\' terms\n";
+                    exit(EXIT_FAILURE);
+            }
+        case ARTT:
+            switch(it) {
+                case FULL:
+                    return "dm(1)\%artt(1:grd(1)\%nr, 1:nt, 1:nt, " + idx + ")";
+                case T:
+                    return "dm(1)\%artt(1:grd(1)\%nr, j, 1:nt, " + idx + ")";
+                case TT:
+                    return "dm(1)\%artt(1:grd(1)\%nr, 1:nt, jj, " + idx + ")";
+            }
+        case ATBC:
+            switch(it) {
+                case FULL:
+                    return "idm(1, 1)\%atbc(1:nt, " + idx + ")";
+                case T:
+                    return "idm(1, 1)\%atbc(j, " + idx + ")";
+                default:
+                    err << "cannot access subscript of `ATBC\' terms\n";
+                    exit(EXIT_FAILURE);
+            }
+        case ATTBC:
+            switch(it) {
+                case FULL:
+                    return "idm(1, 1)\%attbc(1:nt, 1:nt, " + idx + ")";
+                case T:
+                    return "idm(1, 1)\%attbc(j, 1:nt, " + idx + ")";
+                case TT:
+                    return "idm(1, 1)\%attbc(1:nt, jj, " + idx + ")";
+            }
     }
     err << "unknown matrix type";
     exit(EXIT_FAILURE);
@@ -399,6 +449,7 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
             for (auto t: *terms) {
                 Term *term = buildTerm(t);
                 term->ieq = ieq;
+                term->eqName = e->getName();
                 term->idx = computeTermIndex(term);
                 this->eqs[e->getName()].push_back(term);
             }
@@ -431,6 +482,7 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
                 for (auto t: *terms) {
                     TermBC *termBC = new TermBC(*buildTerm(t));
                     termBC->ieq = ieq;
+                    termBC->eqName = e->getName();
                     termBC->idx = computeTermIndex(termBC);
                     termBC->eqLoc = getEqLocation(bc);
                     termBC->varLoc = getVarLocation(bc);
@@ -822,14 +874,12 @@ int TopBackEnd::findPower(ir::Expr *e) {
 void TopBackEnd::emitTerm(Output& os, Term *term) {
     switch(term->getType()) {
         case AS:
-            os << "      dm(1)\%as(" << term->idx << ") = ";
+            os << "      " << term->getMatrix(FULL) << " = ";
             emitExpr(term->expr, os, term->ivar, term->ieq);
             os << "\n";
             break;
         case ART:
-            os << "      " << term->getMatrix() <<
-                "(1:grd(1)\%nr, 1:nt, " << term->idx << ") = &\n";
-            os << "            ";
+            os << "      " << term->getMatrix(FULL) << " = ";
             emitExpr(term->expr, os, term->ivar, term->ieq);
             os << "\n";
             break;
@@ -841,9 +891,8 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
                 os << ", ";
                 os << " &\n";
                 os << "            & ";
-                os << term->getMatrix();
-                os << "(1:grd(1)\%nr, 1:nt, 1:nt, " << term->idx << "),";
-                os << " &\n";
+                os << term->getMatrix(FULL);
+                os << ", &\n";
                 os << "            & ";
                 os << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
                 os << " &\n";
@@ -865,17 +914,16 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
         if (term->llExpr->type == "l") {
             if (term->getType() == ART) {
                 os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix() <<
-                    "(1:grd(1)\%nr, j, " << term->idx << ") = &\n";
-                os << "                  " << term->getMatrix() <<
-                    "(1:grd(1)\%nr, j, " << term->idx << ") " << term->llExpr->op << " &\n";
+                os << "            " << term->getMatrix(T) << " = &\n";
+                os << "                  & " << term->getMatrix(T) <<
+                    " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ARTT ){
                 os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix() <<
-                    "(1:grd(1)\%nr, j, 1:nt, " << term->idx << ") = &\n";
-                os << "                  " << term->getMatrix() <<
-                    "(1:grd(1)\%nr, j, 1:nt, " << term->idx << ") " << term->llExpr->op << " &\n";
+                os << "            " << term->getMatrix(T) <<
+                    " = &\n";
+                os << "                  " << term->getMatrix(T) <<
+                    " " << term->llExpr->op << " &\n";
             }
             else {
                 err << "llExpr with term not depending on l?\n";
@@ -884,10 +932,9 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
         }
         else if (term->llExpr->type == "ll") {
             os << "      do jj=1, nt\n";
-            os << "            " << term->getMatrix() <<
-                "(1:grd(1)\%nr, 1:nt, jj, " << term->idx << ") = &\n";
-            os << "                  " << term->getMatrix() <<
-                "(1:grd(1)\%nr, 1:nt, jj, " << term->idx << ") " << term->llExpr->op << " &\n";
+            os << "            " << term->getMatrix(TT) << " = &\n";
+            os << "                  & " << term->getMatrix(TT) <<
+                " " << term->llExpr->op << " &\n";
         }
         else {
             err << "\n";
@@ -903,9 +950,7 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
     std::string bcLoc = term->varLoc;
     switch(term->getType()) {
         case ATBC:
-            os << "      " << term->getMatrix() <<
-                "(1:nt, " << term->idx << ") = &\n";
-            os << "            ";
+            os << "      " << term->getMatrix(FULL) << " = ";
             emitExpr(term->expr, os, term->ivar, term->ieq, bcLoc);
             os << "\n";
             break;
@@ -917,8 +962,8 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
                 os << ", ";
                 os << " &" << "\n";
                 os << "            & ";
-                os << term->getMatrix();
-                os << "(1:nt, 1:nt, " << term->idx << "),";
+                os << term->getMatrix(FULL);
+                os << ",";
                 os << " &" << "\n";
                 os << "            & ";
                 os << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
@@ -941,17 +986,17 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
         if (term->llExpr->type == "l") {
             if (term->getType() == ATBC) {
                 os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix() <<
-                    "(j, " << term->idx << ") = &\n";
-                os << "                  " << term->getMatrix() <<
-                    "(j, " << term->idx << ") " << term->llExpr->op << " &\n";
+                os << "            " << term->getMatrix(T) <<
+                    " = &\n";
+                os << "                  " << term->getMatrix(T) <<
+                    " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ATTBC ){
                 os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix() <<
-                    "(j, 1:nt, " << term->idx << ") = &\n";
-                os << "                  " << term->getMatrix() <<
-                    "(j, 1:nt, " << term->idx << ") " << term->llExpr->op << " &\n";
+                os << "            " << term->getMatrix(T) <<
+                    " = &\n";
+                os << "                  " << term->getMatrix(T) <<
+                    " " << term->llExpr->op << " &\n";
             }
             else {
                 err << "llExpr with term not depending on l?\n";
@@ -960,10 +1005,10 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
         }
         else if (term->llExpr->type == "ll") {
             os << "      do jj=1, nt\n";
-            os << "            " << term->getMatrix() <<
-                "(1:nt, jj, " << term->idx << ") = &\n";
-            os << "                  " << term->getMatrix() <<
-                "(1:nt, jj, " << term->idx << ") " << term->llExpr->op << " &\n";
+            os << "            " << term->getMatrix(TT) <<
+                " = &\n";
+            os << "                  " << term->getMatrix(TT) <<
+                " " << term->llExpr->op << " &\n";
         }
         else {
             err << "\n";
@@ -975,30 +1020,23 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
     }
 }
 
-void TopBackEnd::emitTermI(Output& os, Term *term) {
-    os << "      " << term->getMatrix() << "i(1," << term->idx << ") = " <<
-        term->power << " ! power\n";
-    os << "      " << term->getMatrix() << "i(2," << term->idx << ") = " <<
-        term->der << " ! der order\n";
-    os << "      " << term->getMatrix() << "i(3," << term->idx << ") = " <<
-        term->ieq << " ! ieq " << term->eqName << "\n";
-    os << "      " << term->getMatrix() << "i(4," << term->idx << ") = " <<
-        term->ivar << " ! ivar " << term->varName << "\n";
+void Term::emitInitIndex(Output& o) {
+    o << "      " << this->getMatrixI() << "(1, " << this->idx << ") = " <<
+        this->power << " ! power\n";
+    o << "      " << this->getMatrixI() << "(2, " << this->idx << ") = " <<
+        this->der << " ! der order\n";
+    o << "      " << this->getMatrixI() << "(3, " << this->idx << ") = " <<
+        this->ieq << " ! ieq (eq: " << this->eqName << ")\n";
+    o << "      " << this->getMatrixI() << "(4, " << this->idx << ") = " <<
+        this->ivar << " ! ivar (var: " << this->varName << ")\n";
 }
 
-void TopBackEnd::emitTermI(Output& os, TermBC *term) {
-    os << "      " << term->getMatrix() << "i(1," << term->idx << ") = " <<
-        term->power << " ! power\n";
-    os << "      " << term->getMatrix() << "i(2," << term->idx << ") = " <<
-        term->der << " ! der order\n";
-    os << "      " << term->getMatrix() << "i(3," << term->idx << ") = " <<
-        term->ieq << " ! ieq " << term->eqName << "\n";
-    os << "      " << term->getMatrix() << "i(4," << term->idx << ") = " <<
-        term->ivar << " ! ivar " << term->varName << "\n";
-    os << "      " << term->getMatrix() << "i(5," << term->idx << ") = " <<
-        term->eqLoc << " ! eq location\n";
-    os << "      " << term->getMatrix() << "i(6," << term->idx << ") = " <<
-        term->varLoc << " ! var location\n";
+void TermBC::emitInitIndex(Output& o) {
+    Term::emitInitIndex(o);
+    o << "      " << this->getMatrixI() << "(5, " << this->idx << ") = " <<
+        this->eqLoc << " ! eq location\n";
+    o << "      " << this->getMatrixI() << "(6, " << this->idx << ") = " <<
+        this->varLoc << " ! var location\n";
 }
 
 int TopBackEnd::ivar(std::string name) {
@@ -1032,6 +1070,21 @@ void TopBackEnd::buildVarList() {
     }
 }
 
+void TopBackEnd::emitUseModel(Output& os) {
+    os << "      use model, only: ";
+    int n = 0;
+    for (auto id: *this->prog->getSymTab()) {
+        if (isField(id->getName()) || isScal(id->getName())) {
+            if (n > 0) {
+                os << ", ";
+            }
+            n++;
+            os << id->getName();
+        }
+    }
+    os << "\n";
+}
+
 void TopBackEnd::emitCode(Output& os) {
 
     for (auto e: *prog->getEqs()) {
@@ -1039,28 +1092,12 @@ void TopBackEnd::emitCode(Output& os) {
         os << "! Indices for equation " << e->getName() << "\n";
         os << "!------------------------------------------------------------\n";
         os << "      subroutine eqi_" << e->getName() << "()\n\n";
-        os << "      use model, only: ";
-        int n = 0;
-        for (auto id: *this->prog->getSymTab()) {
-            if (isField(id->getName()) || isScal(id->getName())) {
-                if (n > 0) {
-                    os << ", ";
-                }
-                n++;
-                os << id->getName();
-            }
-        }
-        os << "\n";
+        emitUseModel(os);
         os << "      use inputs\n";
         os << "      implicit none\n";
 
         for (auto t: eqs[e->getName()]) {
-            if (auto tbc = dynamic_cast<TermBC *>(t)) {
-                this->emitTermI(os, tbc);
-            }
-            else {
-                this->emitTermI(os, t);
-            }
+            t->emitInitIndex(os);
             os << "\n";
         }
 
@@ -1072,18 +1109,7 @@ void TopBackEnd::emitCode(Output& os) {
         os << "! Coupling coefficients for equation " << e->getName() << "\n";
         os << "!------------------------------------------------------------\n";
         os << "      subroutine eq_" << e->getName() << "()\n\n";
-        os << "      use model, only: ";
-        int n = 0;
-        for (auto id: *this->prog->getSymTab()) {
-            if (isField(id->getName()) || isScal(id->getName())) {
-                if (n > 0) {
-                    os << ", ";
-                }
-                n++;
-                os << id->getName();
-            }
-        }
-        os << "\n";
+        emitUseModel(os);
         os << "      use inputs\n";
         os << "      use integrales\n";
         os << "      implicit none\n";
@@ -1234,7 +1260,6 @@ void TopBackEnd::emitInitA(Output& os) {
     inputs << "        nsol = fetch('nsol', 4)\n\n";
     inputs << "        mattype = fetch('mattype', 'FULL')\n";
     inputs << "        dertype = fetch('dertype', 'CHEB')\n\n";
-    inputs << "        ! user parameters:\n";
     for (auto s: *this->prog->getSymTab()) {
         if (auto p = dynamic_cast<ir::Param *>(s)) {
             std::string default_value;
@@ -1319,13 +1344,15 @@ void TopBackEnd::emitInitA(Output& os) {
 
     for (int i=1; i<=nvar; i++) {
         os << "      do j=2, nt\n";
-        os << "            dm(1)%lvar(j, " << i<< ") = 2 + dm(1)\%lvar(j-1, " << i<< ")\n";
+        os << "            dm(1)\%lvar(j, " << i<< ") = 2 + dm(1)\%lvar(j-1, " <<
+            i << ")\n";
         os << "      enddo\n";
     }
     os << "\n";
     for (int i=1; i<=neq; i++) {
         os << "      do j=2, nt\n";
-        os << "            dm(1)%leq(j, " << i<< ") = 2 + dm(1)\%leq(j-1, " << i<< ")\n";
+        os << "            dm(1)\%leq(j, " << i<< ") = 2 + dm(1)\%leq(j-1, " <<
+            i << ")\n";
         os << "      enddo\n";
     }
     os << "\n";
@@ -1413,9 +1440,6 @@ void TopBackEnd::emitInitA(Output& os) {
         os << "      call eq_" << e->getName() << "()\n";
     }
 
-
-
-
     bool *eqHasModifyL0 = new bool[this->eqs.size()];
     for (int i=0; i<eqs.size(); i++)
         eqHasModifyL0[i] = false;
@@ -1448,8 +1472,8 @@ void TopBackEnd::emitInitA(Output& os) {
                 if (varLm0Null[t->varName] && modifyCalled == false) {
                     modifyCalled = true;
                     varLm0Null[t->varName] = false; // do not set twice
-                    os << "      call modify_l0(" <<  t->getMatrix();
-                    os << "(1:grd(1)\%nr, 1:nt, 1:nt, " << t->idx << "), ";
+                    os << "      call modify_l0(" <<  t->getMatrix(FULL);
+                    os << ", ";
                     os << "dm(1)\%lvar(1, " << t->ivar << ")";
                     os << ")\n";
                     break;
