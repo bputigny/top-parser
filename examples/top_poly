@@ -49,8 +49,7 @@ in
 
 # eqB
 equation eqB:
- 0 =
-    -fp                                                 * B  +
+fp*B =
     Illm(-zeta^2 * hh / (r_map^2 * r_z))                * u'+
     Illm((-2*zeta*hh-zeta^2*pindex*hhz)/(r_map^2*r_z))  * u +
     Illm(l'*(l'+1)*zeta*hh/(r_map^2*r_z))               * v +
@@ -135,9 +134,8 @@ with (r=0)
 
 # eqPi
 equation eqPi:
-0 =
-    fp * Gamma1/((pindex+1.0)*lambda)                               * B -
-    fp                                                              * Pi +
+fp*Pi =
+    fp * Gamma1/((pindex+1.0)*lambda)                               * B +
          Illm((Gamma1/gamma_p-1.0)*zeta^2*hhz/(lambda*r_map^2*r_z)) * u +
          Jllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * v +
          Kllm((Gamma1/gamma_p-1.0)*zeta*hht/(lambda*r_map^2*r_z))   * w
