@@ -1,10 +1,10 @@
 param int m
 param int lres
 param int iparity
-param double rota # f8.6
-param int lmod # I3
-param int lmax # I3
-param int iCor # I1
+param double rota
+param int lmod
+param int lmax
+param int iCor
 param int orderFD
 param double pindex
 
@@ -41,9 +41,6 @@ pder = modulo(abs(m)+iparity+1, 2)
 uder = modulo(abs(m)+iparity, 2)
 
 lmax = maxval(lvar)
-
-# zeta(1, :) = 1d0   # add-hoc instructions to avoid divisions by zero
-# r_map(1, :) = 1d0  # add-hoc instructions to avoid divisions by zero
 
 in
 

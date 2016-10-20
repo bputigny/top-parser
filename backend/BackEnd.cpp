@@ -5,8 +5,8 @@
 void Output::checkLineLen() {
 #if 1
     if (lineLen > 60) {
-        os << " &\n\t& ";
-        lineLen = strlen("\t& ");
+        os << "&\n\t&";
+        lineLen = strlen("\t&");
     }
 #endif
 }

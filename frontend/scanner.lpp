@@ -36,6 +36,8 @@ SPACE		[ \t]
                                   return KW_TYPE;} }
 "double"        { if (!comment) { yylval.str = new std::string(strdup(yytext));
                                   return KW_TYPE;} }
+"string"        { if (!comment) { yylval.str = new std::string(strdup(yytext));
+                                  return KW_TYPE;} }
 {L}({L}|{D})*   { if (!comment) { yylval.str = new std::string(strdup(yytext));
                                   return ID;} }
 {D}+            { if (!comment) { yylval.num = atoi(yytext); return NUM;} }

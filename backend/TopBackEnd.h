@@ -75,6 +75,7 @@ class TopBackEnd : public BackEnd {
         void emitExpr(ir::Expr *expr, Output& o,
                 int ivar,
                 int ieq,
+                bool emitLlExpr = false,
                 std::string bcLocation = "");
 
         ir::Identifier *findVar(ir::Expr *e);

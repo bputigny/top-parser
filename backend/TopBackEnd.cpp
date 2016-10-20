@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 #define unsupported(e) { \
     err << __FILE__ << ":" << __LINE__ << " unsupported expr\n"; \
@@ -27,37 +28,44 @@ LlExpr::LlExpr(int ivar, ir::Expr *expr) {
         this->op = be->getOp();
     }
     else {
-        err << "Could not find llExpr parents\n";
-        exit(EXIT_FAILURE);
+        warn << "Could not find llExpr parents\n";
+        this->op = '*';
+        // exit(EXIT_FAILURE);
     }
 
     auto ids = getIds(expr);
 
-    if (ids.size() != 1) {
-        err << "building llExpr from non compatible expression\n";
-        exit(EXIT_FAILURE);
-    }
+    // if (ids.size() != 1) {
+    //     err << "building llExpr from non compatible expression\n";
+    //     expr->display();
+    //     exit(EXIT_FAILURE);
+    // }
+    // else {
+    if (expr->contains(ll))
+        this->type = "ll";
+    else if (expr->contains(l))
+        this->type = "l";
     else {
-        if (expr->contains(ll))
-            this->type = "ll";
-        else if (expr->contains(l))
-            this->type = "l";
-        else {
-            err << "llExpr does not contain l or l' terms\n";
-            exit(EXIT_FAILURE);
-        }
+        err << "llExpr does not contain l or l' terms\n";
+        exit(EXIT_FAILURE);
     }
 }
 
 void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
-        int ivar, int ieq, std::string bcLocation) {
+        int ivar, int ieq, bool emitLlExpr, std::string bcLocation) {
 
     if (*expr == l) {
-        o << "dm(1)\%lvar(j, " << ivar << ")";
+        if (emitLlExpr)
+            o << "dm(1)\%lvar(j, " << ivar << ")";
+        else
+            o << "1d0";
         return;
     }
     if (*expr == ll) {
-        o << "dm(1)\%lvar(jj, " << ivar << ")";
+        if (emitLlExpr)
+            o << "dm(1)\%lvar(jj, " << ivar << ")";
+        else
+            o << "1d0";
         return;
     }
     if (*expr == fp) {
@@ -67,7 +75,7 @@ void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
 
     if (auto be = dynamic_cast<ir::BinExpr *>(expr)) {
         o << "(";
-        emitExpr(be->getLeftOp(), o, ivar, ieq, bcLocation);
+        emitExpr(be->getLeftOp(), o, ivar, ieq, emitLlExpr, bcLocation);
         switch (be->getOp()) {
             case '^':
                 o << "**";
@@ -75,12 +83,13 @@ void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
             default:
                 o << be->getOp();
         }
-        emitExpr(be->getRightOp(), o, ivar, ieq, bcLocation);
+        emitExpr(be->getRightOp(), o, ivar, ieq, emitLlExpr, bcLocation);
         o << ")";
     }
     else if (auto ue = dynamic_cast<ir::UnaryExpr *>(expr)) {
-        o << ue->getOp();
-        emitExpr(ue->getExpr(), o, ivar, ieq, bcLocation);
+        o << ue->getOp() << "(";
+        emitExpr(ue->getExpr(), o, ivar, ieq, emitLlExpr, bcLocation);
+        o << ")";
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int narg = 0;
@@ -89,14 +98,20 @@ void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
         for (auto a: *fc->getArgs()) {
             if (narg++ > 0)
                 o << ", ";
-            emitExpr(a, o, ivar, ieq, bcLocation);
+            emitExpr(a, o, ivar, ieq, emitLlExpr, bcLocation);
         }
         o << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
-        o << id->getName();
-        if (bcLocation != "" && isField(id->getName())) {
-            o << "(" << bcLocation << ", 1:lres)";
+        if (isDef(id->getName())) {
+            o << id->getName();
+            if (bcLocation != "" && isField(id->getName())) {
+                o << "(" << bcLocation << ", 1:lres)";
+            }
+        }
+        else {
+            err << "`" << id->getName() << "\' is undefined\n";
+            exit(EXIT_FAILURE);
         }
     }
     else if (auto v = dynamic_cast<ir::Value<int> *>(expr)) {
@@ -239,8 +254,17 @@ std::list<ir::Equation *> TopBackEnd::formatEquations() {
     return list;
 }
 
+ir::FuncCall *isCoupling(ir::Expr *e) {
+    if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
+        if (std::strstr(fc->getName().c_str(), "llm")) {
+            return fc;
+        }
+    }
+    return NULL;
+}
+
 TermType Term::getType() {
-    if (dynamic_cast<ir::FuncCall *>(expr)) {
+    if (isCoupling(expr)) {
         return ARTT;
     }
     else {
@@ -256,7 +280,7 @@ TermType Term::getType() {
 }
 
 TermType TermBC::getType() {
-    if (dynamic_cast<ir::FuncCall *>(expr)) {
+    if (isCoupling(expr)) {
         return ATTBC;
     }
     else return ATBC;
@@ -329,6 +353,8 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
         }
         else if (auto ue = dynamic_cast<ir::UnaryExpr *>(t)) {
             Term *ret = buildTerm(ue->getExpr());
+            if (ue->getOp() != '-')
+                unsupported(ue);
             ret->expr = new ir::UnaryExpr(ret->expr, '-');
             return ret;
         }
@@ -367,11 +393,15 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
         }
     }
 
+#if 1
     if (llExpr) {
         ir::Expr *newNode = new ir::Value<float>(1.0);
         this->prog->replace(llExpr, newNode);
-        if (expr == llExpr) expr = newNode;
+        if (expr == llExpr) {
+            expr = newNode;
+        }
     }
+#endif
 
     return new Term(expr, llExpr,
             ir::Symbol(var->getName()),
@@ -521,6 +551,7 @@ TopBackEnd::~TopBackEnd() { }
 // this also transform FuncCall (dr(u, 3) into the specialized DiffExpr(u, r, 3)
 void TopBackEnd::simplify(ir::Expr *expr) {
     Analysis<ir::Identifier> a;
+    Analysis<ir::UnaryExpr> a2;
     assert(expr);
     auto foldDer = [this] (ir::Identifier *id) {
         ir::Expr *root = id;
@@ -546,6 +577,16 @@ void TopBackEnd::simplify(ir::Expr *expr) {
             prog->replace(root, newNode);
         }
     };
+
+    auto foldConst = [this, &expr] (ir::UnaryExpr *ue) {
+        if (ue->getOp() == '-') {
+            if (auto val = dynamic_cast<ir::Value<int> *>(ue->getExpr())) {
+                ir::Value<int> *newNode = new ir::Value<int>(-val->getValue());
+                prog->replace(ue, newNode);
+            }
+        }
+    };
+
     auto foldDr = [this, &expr] (ir::Identifier *id) {
 
         if (id->getName() == "dr") {
@@ -553,17 +594,17 @@ void TopBackEnd::simplify(ir::Expr *expr) {
             assert(fc);
 
             std::string derOrder;
-            if (auto *order = dynamic_cast<ir::Identifier *>(fc->getChildren()[1])) {
+            if (auto order = dynamic_cast<ir::Identifier *>(fc->getChildren()[1])) {
                 derOrder = order->getName();
             }
-            else if (auto *order = dynamic_cast<ir::Value<int> *>(fc->getChildren()[1])) {
+            else if (auto order = dynamic_cast<ir::Value<int> *>(fc->getChildren()[1])) {
                 derOrder = std::to_string(order->getValue());
             }
             else {
                 err << "derivative order should be an integer or a variable...";
                 unsupported(fc);
             }
-            if (auto *derVar = dynamic_cast<ir::Identifier *>(fc->getChildren()[0])) {
+            if (auto derVar = dynamic_cast<ir::Identifier *>(fc->getChildren()[0])) {
                 ir::Node *newNode = new ir::DiffExpr(
                         derVar,
                         new ir::Identifier("r"),
@@ -576,6 +617,8 @@ void TopBackEnd::simplify(ir::Expr *expr) {
             }
         }
     };
+    expr->setParents();
+    a2.run(foldConst, expr);
     expr->setParents();
     a.run(foldDr, expr);
     expr->setParents();
@@ -634,14 +677,19 @@ bool haveLlTerms(ir::Expr *e) {
 ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
     assert(e);
 
+    if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
+        if (auto ll = extractLlExpr(ue->getExpr())) {
+            ir::UnaryExpr *newExpr = new ir::UnaryExpr(ll,
+                    ue->getOp());
+            newExpr->setParent(e->getParent());
+            return newExpr;
+        }
+    }
+
     auto ids = getIds(e);
     if (ids.size() == 1) {
         if (*ids[0] == l || *ids[0] == ll) {
-            if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
-                return ue->getExpr();
-            }
-            else
-                return e;
+            return e;
         }
     }
     if (ids.size() == 0)
@@ -661,6 +709,13 @@ ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
     }
     else if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
         return extractLlExpr(ue->getExpr());
+    }
+    else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
+        for (auto arg: *fc->getArgs()) {
+            if (extractLlExpr(arg)) {
+                return fc;
+            }
+        }
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
         if (*id == l || *id == ll) {
@@ -770,7 +825,7 @@ ir::FuncCall *TopBackEnd::findCoupling(ir::Expr *e) {
     ir::FuncCall *ret = NULL;
     std::vector<ir::Identifier *> ids = getIds(e);
     for (auto i: ids) {
-        if (auto fc = dynamic_cast<ir::FuncCall *>(i)) {
+        if (auto fc = isCoupling(i)) {
             nfc++;
             ret = fc;
         }
@@ -832,6 +887,13 @@ int TopBackEnd::findPower(ir::Expr *e) {
             case '*':
                 return findPower(be->getLeftOp()) + findPower(be->getRightOp());
                 break;
+            case '^':
+                if (auto v = dynamic_cast<ir::Value<int> *>(be->getRightOp())) {
+                        return findPower(be->getLeftOp()) * v->getValue();
+                }
+                else
+                    unsupported(e);
+                break;
             case '/':
                 ids = getIds(be->getRightOp());
                 for (auto i: ids) {
@@ -874,20 +936,16 @@ int TopBackEnd::findPower(ir::Expr *e) {
 void TopBackEnd::emitTerm(Output& os, Term *term) {
     switch(term->getType()) {
         case AS:
-            os << "      " << term->getMatrix(FULL) << " = ";
-            emitExpr(term->expr, os, term->ivar, term->ieq);
-            os << "\n";
-            break;
         case ART:
             os << "      " << term->getMatrix(FULL) << " = ";
-            emitExpr(term->expr, os, term->ivar, term->ieq);
+            emitExpr(term->expr, os, term->ivar, term->ieq, true);
             os << "\n";
             break;
         case ARTT:
-            if (auto fc = dynamic_cast<ir::FuncCall *>(term->expr)) {
+            if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
                 os << "      call " << fc->getName() << "(";
-                emitExpr(arg, os, term->ivar, term->ieq);
+                emitExpr(arg, os, term->ivar, term->ieq, false);
                 os << ", ";
                 os << " &\n";
                 os << "            & ";
@@ -914,8 +972,9 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
         if (term->llExpr->type == "l") {
             if (term->getType() == ART) {
                 os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix(T) << " = &\n";
-                os << "                  & " << term->getMatrix(T) <<
+                os << "            " << term->getMatrix(T) <<
+                    " = &\n";
+                os << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ARTT ){
@@ -940,8 +999,7 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
             err << "\n";
             exit(EXIT_FAILURE);
         }
-        os << "                  ";
-        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq);
+        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq, true);
         os << "\n      end do\n";
     }
 }
@@ -951,14 +1009,14 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
     switch(term->getType()) {
         case ATBC:
             os << "      " << term->getMatrix(FULL) << " = ";
-            emitExpr(term->expr, os, term->ivar, term->ieq, bcLoc);
+            emitExpr(term->expr, os, term->ivar, term->ieq, true, bcLoc);
             os << "\n";
             break;
         case ATTBC:
-            if (auto fc = dynamic_cast<ir::FuncCall *>(term->expr)) {
+            if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
                 os << "      call " << fc->getName() << "bc(";
-                emitExpr(arg, os, term->ivar, term->ieq, bcLoc);
+                emitExpr(arg, os, term->ivar, term->ieq, false, bcLoc);
                 os << ", ";
                 os << " &" << "\n";
                 os << "            & ";
@@ -974,6 +1032,7 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
             }
             else {
                 err << "ARTT terms should always have coupling integral expression\n";
+                term->expr->display();
                 exit(EXIT_FAILURE);
             }
             break;
@@ -1015,7 +1074,7 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
             exit(EXIT_FAILURE);
         }
         os << "                  ";
-        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq, bcLoc);
+        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq, true, bcLoc);
         os << "\n      end do\n";
     }
 }
@@ -1239,6 +1298,9 @@ void TopBackEnd::emitInitA(Output& os) {
             else if (p->getType() == "double") {
                 type = "double precision";
             }
+            else if (p->getType() == "string") {
+                type = "character(512)";
+            }
             else {
                 err << "unsupported type in definition\n";
                 exit(EXIT_FAILURE);
@@ -1268,6 +1330,9 @@ void TopBackEnd::emitInitA(Output& os) {
             }
             else if (p->getType() == "int") {
                 default_value = "0";
+            }
+            else if (p->getType() == "string") {
+                default_value = "\"\"";
             }
             else {
                 err << "Unsupported type in definition of parameter `" <<
@@ -1428,12 +1493,14 @@ void TopBackEnd::emitInitA(Output& os) {
     os << "      first_dmat = .false.\n";
     os << "      call init_var_list()\n";
 
-    os << "      lmax = maxval(dm(1)\%lvar)\n";
-    os << "      call initialisation(nt, nr, m, lres, lmax)\n\n";
+    os << "      ! lmax = maxval(dm(1)\%lvar)\n";
+    os << "      call initialisation(nt, nr, m, lres, llmax)\n\n";
+    os << "      call init_avg(dmat(1)\%derive(:, :, 0), dmat(1)\%lbder(0), " << 
+        "dmat(1)\%ubder(0))\n\n";
 
     os << "      do j=1, nt\n";
-    os << "            zeta(1, j) = 1d0\n";
-    os << "            r_map(1, j) = 1d0\n";
+    os << "            ! zeta(1, j) = 1d0\n";
+    os << "            ! r_map(1, j) = 1d0\n";
     os << "      enddo\n";
 
     for (auto e: *this->prog->getEqs()) {
@@ -1461,15 +1528,24 @@ void TopBackEnd::emitInitA(Output& os) {
     for (auto e: eqs) {
         bool eqNeedModifyL0 = true;
         for (auto t: e.second) {
+            if (t->getType() == AS)
+                eqNeedModifyL0 = false;
             if (auto fc = dynamic_cast<ir::FuncCall *>(t->expr)) {
-                if (fc->getName() == "Illm" && t->llExpr == NULL)
+                if (std::strstr(fc->getName().c_str(), "Illm") && t->llExpr == NULL) {
                     eqNeedModifyL0 = false;
+                }
             }
         }
         if (eqNeedModifyL0) {
             bool modifyCalled = false;
             for (auto t: e.second) {
-                if (varLm0Null[t->varName] && modifyCalled == false) {
+                if (varLm0Null[t->varName] && modifyCalled == false
+#if 1
+                        && (e.first == "eq" + t->varName)
+#endif
+                        ) {
+                    t->expr->display(e.first + ": modify_l0 on term: (var: " +
+                           t->varName + "), (power: " + std::to_string(t->power) + ")");
                     modifyCalled = true;
                     varLm0Null[t->varName] = false; // do not set twice
                     os << "      call modify_l0(" <<  t->getMatrix(FULL);
@@ -1480,7 +1556,8 @@ void TopBackEnd::emitInitA(Output& os) {
                 }
             }
             if (modifyCalled == false) {
-                err << "could not find a spot to insert modify_l0\n";
+                err << "could not find a spot to insert modify_l0 in `" <<
+                e.first << "\'\n";
                 exit(EXIT_FAILURE);
             }
         }
@@ -1491,10 +1568,12 @@ void TopBackEnd::emitInitA(Output& os) {
    os << "            r_map(1, j) = 0d0\n";
    os << "      enddo\n";
 
-    os << "      call integrales_clear()\n";
+   os << "      call integrales_clear()\n";
+
+   os << "      call dump_coef()\n";
 
 
-    os << "\n      end subroutine init_a\n";
+   os << "\n      end subroutine init_a\n";
 
 }
 
