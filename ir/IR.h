@@ -20,9 +20,9 @@ class Node : public DOT {
     private:
         static int nNode;
     protected:
-        std::string srcLoc;
         Node *parent;
         std::vector<Node *> children;
+
     public:
         Node(Node *par = NULL);
         virtual ~Node();
@@ -32,7 +32,7 @@ class Node : public DOT {
         std::vector<Node *>& getChildren();
         std::vector<Node *> getLeafs();
         bool isLeaf();
-        std::string getSourceLocation();
+        std::string srcLoc;
         void setSourceLocation(std::string);
         void clear();
         static int getNodeNumber();
@@ -131,11 +131,10 @@ class ExprLst : public std::vector<Expr *> {
 
 class Identifier : public Expr {
     protected:
-        std::string name;
 
     public:
         Identifier(std::string n, int vectComponent = 0, Node *parent = NULL);
-        std::string getName();
+        const std::string name;
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
         bool operator==(Node&);
@@ -178,19 +177,16 @@ class DeclLst : public std::list<Decl *> {
 
 class BCLst;
 class Equation : public Node {
-    protected:
-        std::string name;
-
     public:
-        Equation(Expr *lhs, Expr *rhs, BCLst *bc, Node *p = NULL);
+        Equation(std::string name, Expr *lhs, Expr *rhs, BCLst *bc, Node *p = NULL);
+        Equation(std::string name, Equation *eq);
+        const std::string name;
         virtual void dump(std::ostream& os) const;
         Expr *getLHS();
         Expr *getRHS();
         BCLst *getBCs();
         virtual Node *copy();
         bool operator==(Node&);
-        void setName(std::string&);
-        std::string& getName();
         void setBCs(ir::BCLst *);
 };
 
@@ -247,13 +243,12 @@ class IndexRangeLst : public std::list<IndexRange *> {
 
 class Symbol {
     protected:
-        std::string name;
         Expr *expr;
         bool internal;
     public:
         Symbol(std::string name, Expr *def = NULL, bool internal = false);
-        virtual std::string& getName();
-        Expr *getDef();
+        const std::string name;
+        virtual Expr *getDef();
         bool isInternal();
 };
 

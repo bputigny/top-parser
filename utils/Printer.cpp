@@ -17,7 +17,7 @@ void Printer::init(int v) {
     Printer::verbosity = v;
 }
 
-std::ostream& Printer::operator<<(std::string& str) {
+std::ostream& Printer::operator<<(const std::string str) {
     if (Printer::verbosity >= this->level) {
         os << this->pref << str;
         return this->os;

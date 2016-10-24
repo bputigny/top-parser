@@ -11,20 +11,20 @@ void SymTab::push_back(ir::Symbol *s) {
 
 void SymTab::add(ir::Symbol *s) {
     assert(s);
-    if (this->search(s->getName()) == NULL)
+    if (this->search(s->name) == NULL)
         std::list<ir::Symbol *>::push_back(s);
     else
-        err << s->getName() << " already defined\n";
+        err << s->name << " already defined\n";
 }
 
 ir::Symbol *SymTab::search(ir::Identifier *id) const {
     assert(id);
-    return search(id->getName());
+    return search(id->name);
 }
 
 ir::Symbol *SymTab::search(const std::string& id) const {
     for (auto s:*this) {
-        if (s->getName() == id) {
+        if (s->name == id) {
             return s;
         }
     }
@@ -63,7 +63,7 @@ void SymTab::dumpDOT(std::ostream& os, std::string title, bool root) const {
     os << "<tr>\n";
     for (auto s:*this) {
         os << "<td port=\"" << (long)s << "\">\n";
-        os << s->getName() << "\n";
+        os << s->name << "\n";
         os << "</td>\n";
     }
     //  port=\"" << (long)s << "\"

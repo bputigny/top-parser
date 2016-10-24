@@ -62,10 +62,9 @@ int Node::getNodeNumber() {
     return Node::nNode;
 }
 
-Node::Node(Node *p) : children() {
+Node::Node(Node *p) : children(), srcLoc("unknown") {
     nNode++;
     parent = p;
-    srcLoc = "unknown";
 }
 
 Node *Node::getParent() {
@@ -119,10 +118,6 @@ bool Node::isLeaf() {
     return children.empty();
 }
 
-std::string Node::getSourceLocation() {
-    return srcLoc;
-}
-
 void Node::clear() {
     for(auto c: children) {
         c->clear();
@@ -147,7 +142,7 @@ void Program::buildSymTab() {
     for (auto d:*decls) {
         if (ir::Identifier *id = dynamic_cast<ir::Identifier *>(d->getLHS())) {
             assert(d->getDef());
-            ir::Variable *var = new ir::Variable(id->getName(), id->vectComponent,
+            ir::Variable *var = new ir::Variable(id->name, id->vectComponent,
                     d->getDef());
             symTab->add(var);
         }
@@ -160,7 +155,7 @@ void Program::buildSymTab() {
     for (auto e:*eqs) {
         Analysis<ir::Identifier> a = Analysis<ir::Identifier>();
         auto checkDefined = [this] (ir::Identifier *s) -> void {
-            std::string name = s->getName();
+            std::string name = s->name;
             if (this->symTab->search(name) == NULL)
                 err << "undefined symbol: `" << name << "'\n";
         };
@@ -354,10 +349,6 @@ Node *DiffExpr::copy() {
 Identifier::Identifier(std::string n, int vectComponent, Node *p) :
     Expr(p), name(n), vectComponent(vectComponent) { }
 
-std::string Identifier::getName() {
-    return name;
-}
-
 Node *Identifier::copy() {
     return new Identifier(name);
 }
@@ -369,7 +360,7 @@ void Identifier::dump(std::ostream& os) const {
 bool Identifier::operator==(Node& n) {
     try {
         Identifier& id = dynamic_cast<Identifier&>(n);
-        return this->getName() == id.getName();
+        return this->name == id.name;
     }
     catch (std::bad_cast) {
         return false;
@@ -404,7 +395,8 @@ Node *Decl::copy() {
     return new Decl(r, l);
 }
 
-Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p), name("undef") {
+Equation::Equation(std::string name,
+        Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p), name(name) {
     children.push_back(lhs);
     children.push_back(rhs);
     if (bcs) {
@@ -414,12 +406,11 @@ Equation::Equation(Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p), name("u
     }
 }
 
-void Equation::setName(std::string& name) {
-    this->name = name;
-}
-
-std::string& Equation::getName() {
-    return this->name;
+Equation::Equation(std::string name, Equation *eq) : Node(eq->getParent()), name(name) {
+    children.push_back(eq->getLHS());
+    children.push_back(eq->getRHS());
+    for (auto bc: *eq->getBCs())
+        children.push_back(bc);
 }
 
 void Equation::setBCs(ir::BCLst *bcs) {
@@ -461,8 +452,7 @@ Node *Equation::copy() {
     Expr *l = dynamic_cast<Expr *>(getLHS());
     Expr *r = dynamic_cast<Expr *>(getRHS());
     BCLst *bcs = getBCs();
-    ir::Equation *ret = new Equation(l, r, bcs);
-    ret->setName(this->name);
+    ir::Equation *ret = new Equation(this->name, l, r, bcs);
     return ret;
 }
 
@@ -537,7 +527,7 @@ bool FuncCall::operator==(Node& n) {
     try {
         FuncCall& fc = dynamic_cast<FuncCall&>(n);
         bool sameArgs;
-        if (this->getName() != fc.getName())
+        if (this->name != fc.name)
             return false;
         if (this->getArgs()->size() == fc.getArgs()->size())
             sameArgs = true;

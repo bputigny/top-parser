@@ -98,7 +98,7 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int narg = 0;
-        fo << fc->getName();
+        fo << fc->name;
         fo << "(";
         for (auto a: *fc->getArgs()) {
             if (narg++ > 0)
@@ -108,14 +108,14 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
         fo << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
-        if (isDef(id->getName())) {
-            fo << id->getName();
-            if (bcLocation != "" && isField(id->getName())) {
+        if (isDef(id->name)) {
+            fo << id->name;
+            if (bcLocation != "" && isField(id->name)) {
                 fo << "(" << bcLocation << ", 1:lres)";
             }
         }
         else {
-            err << "`" << id->getName() << "\' is undefined\n";
+            err << "`" << id->name << "\' is undefined\n";
             exit(EXIT_FAILURE);
         }
     }
@@ -248,12 +248,11 @@ std::list<ir::Equation *> TopBackEnd::formatEquations() {
         else {
             eq = new ir::BinExpr(rhs, '-', lhs);
         }
-        if (e->getName() == "undef") {
+        if (e->name == "undef") {
             err << "equation without a name\n";
             exit(EXIT_FAILURE);
         }
-        ir::Equation *newEq = new ir::Equation(eq, NULL, e->getBCs());
-        newEq->setName(e->getName());
+        ir::Equation *newEq = new ir::Equation(e->name, eq, NULL, e->getBCs());
         list.push_back(newEq);
     }
     return list;
@@ -261,7 +260,7 @@ std::list<ir::Equation *> TopBackEnd::formatEquations() {
 
 ir::FuncCall *isCoupling(ir::Expr *e) {
     if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
-        if (std::strstr(fc->getName().c_str(), "llm")) {
+        if (std::strstr(fc->name.c_str(), "llm")) {
             return fc;
         }
     }
@@ -316,8 +315,8 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
     std::string der = this->findDerivativeOrder(var);
     ir::Expr *expr = this->findCoupling(t);
     ir::Expr *llExpr = NULL;
-    std::string varName = var->getName();
-    int ivar = this->ivar(var->getName());
+    std::string varName = var->name;
+    int ivar = this->ivar(var->name);
     if (expr == NULL) {
         if (auto be = dynamic_cast<ir::BinExpr *>(t)) {
             if (be->getOp() != '*') {
@@ -325,27 +324,27 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
                 exit(EXIT_FAILURE);
             }
             if (auto id = dynamic_cast<ir::Identifier *>(be->getRightOp())) {
-                if (isVar(id->getName()))
+                if (isVar(id->name))
                     expr = be->getLeftOp();
                 else
                     unsupported(t);
             }
             else if (auto de = dynamic_cast<ir::DiffExpr *>(be->getRightOp())) {
                 ir::Identifier *id = dynamic_cast<ir::Identifier *>(de->getExpr());
-                if (id != NULL && isVar(id->getName()))
+                if (id != NULL && isVar(id->name))
                     expr = be->getLeftOp();
                 else
                     unsupported(t);
             }
             else if (auto id = dynamic_cast<ir::Identifier *>(be->getLeftOp())) {
-                if (isVar(id->getName()))
+                if (isVar(id->name))
                     expr = be->getRightOp();
                 else
                     unsupported(t);
             }
             else if (auto de = dynamic_cast<ir::DiffExpr *>(be->getLeftOp())) {
                 ir::Identifier *id = dynamic_cast<ir::Identifier *>(de->getExpr());
-                if (id != NULL && isVar(id->getName()))
+                if (id != NULL && isVar(id->name))
                     expr = be->getRightOp();
                 else
                     unsupported(t);
@@ -409,7 +408,7 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
 #endif
 
     return new Term(expr, llExpr,
-            ir::Symbol(var->getName()),
+            ir::Symbol(var->name),
             power, der, ivar, varName);
 }
 
@@ -435,7 +434,7 @@ int TopBackEnd::computeTermIndex(Term *term) {
 
 std::string getVarLocation(ir::BC *bc) {
     if (auto id = dynamic_cast<ir::Identifier *>(bc->getLoc()->getLHS())) {
-        if (id->getName() == "r") {
+        if (id->name == "r") {
             if (auto v = dynamic_cast<ir::Value<int> *>(bc->getLoc()->getRHS())) {
                 if (v->getValue() == 0)
                     return "1";
@@ -479,14 +478,14 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
     for (auto e: eqs) {
         ieq++;
         std::vector<ir::Expr *> *terms = this->splitIntoTerms(e->getLHS());
-        this->eqs[e->getName()] = std::list<Term *>();
+        this->eqs[e->name] = std::list<Term *>();
         if (terms) {
             for (auto t: *terms) {
                 Term *term = buildTerm(t);
                 term->ieq = ieq;
-                term->eqName = e->getName();
+                term->eqName = e->name;
                 term->idx = computeTermIndex(term);
-                this->eqs[e->getName()].push_back(term);
+                this->eqs[e->name].push_back(term);
             }
 
             for (auto bc: *e->getBCs()) {
@@ -517,11 +516,11 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
                 for (auto t: *terms) {
                     TermBC *termBC = new TermBC(*buildTerm(t));
                     termBC->ieq = ieq;
-                    termBC->eqName = e->getName();
+                    termBC->eqName = e->name;
                     termBC->idx = computeTermIndex(termBC);
                     termBC->eqLoc = getEqLocation(bc);
                     termBC->varLoc = getVarLocation(bc);
-                    this->eqs[e->getName()].push_back(termBC);
+                    this->eqs[e->name].push_back(termBC);
                 }
             }
 
@@ -594,13 +593,13 @@ void TopBackEnd::simplify(ir::Expr *expr) {
 
     auto foldDr = [this, &expr] (ir::Identifier *id) {
 
-        if (id->getName() == "dr") {
+        if (id->name == "dr") {
             ir::FuncCall *fc = dynamic_cast<ir::FuncCall *>(id);
             assert(fc);
 
             std::string derOrder;
             if (auto order = dynamic_cast<ir::Identifier *>(fc->getChildren()[1])) {
-                derOrder = order->getName();
+                derOrder = order->name;
             }
             else if (auto order = dynamic_cast<ir::Value<int> *>(fc->getChildren()[1])) {
                 derOrder = std::to_string(order->getValue());
@@ -673,7 +672,7 @@ bool TopBackEnd::isDef(std::string id) {
 bool haveLlTerms(ir::Expr *e) {
     std::vector<ir::Identifier *> ids = getIds(e);
     for (auto i: ids) {
-        if (i->getName() == "l")
+        if (i->name == "l")
             return true;
     }
     return false;
@@ -811,7 +810,7 @@ ir::Identifier *TopBackEnd::findVar(ir::Expr *e) {
     ir::Identifier *ret = NULL;
     std::vector<ir::Identifier *> ids = getIds(e, false);
     for (auto id: ids) {
-        if (this->isVar(id->getName())) {
+        if (this->isVar(id->name)) {
             ret = id;
             nvar++;
         }
@@ -902,7 +901,7 @@ int TopBackEnd::findPower(ir::Expr *e) {
             case '/':
                 ids = getIds(be->getRightOp());
                 for (auto i: ids) {
-                    if (i->getName() == "fp") {
+                    if (i->name == "fp") {
                         err << "fp should not appear in the rhs of a div operator\n";
                         unsupported(e);
                     }
@@ -914,7 +913,7 @@ int TopBackEnd::findPower(ir::Expr *e) {
         }
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
-        if (id->getName() == "fp") {
+        if (id->name == "fp") {
             return 1;
         }
         else
@@ -949,7 +948,7 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
         case ARTT:
             if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
-                fo << "      call " << fc->getName() << "(";
+                fo << "      call " << fc->name << "(";
                 emitExpr(arg, fo, term->ivar, term->ieq, false);
                 fo << ", ";
                 fo << " &\n";
@@ -1020,7 +1019,7 @@ void TopBackEnd::emitTerm(FortranOutput& fo, TermBC *term) {
         case ATTBC:
             if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
-                fo << "      call " << fc->getName() << "bc(";
+                fo << "      call " << fc->name << "bc(";
                 emitExpr(arg, fo, term->ivar, term->ieq, false, bcLoc);
                 fo << ", ";
                 fo << " &" << "\n";
@@ -1106,7 +1105,7 @@ void TermBC::emitInitIndex(FortranOutput& fo) {
 int TopBackEnd::ivar(std::string name) {
     int i = 1;
     for (auto v: this->vars) {
-        if (v->getName() == name)
+        if (v->name == name)
             return i;
         i++;
     }
@@ -1117,7 +1116,7 @@ int TopBackEnd::ivar(std::string name) {
 int TopBackEnd::ieq(std::string name) {
     int i = 1;
     for (auto e: *this->prog->getEqs()) {
-        if (e->getName() == name)
+        if (e->name == name)
             return i;
         i++;
     }
@@ -1138,12 +1137,12 @@ void TopBackEnd::emitUseModel(FortranOutput& fo) {
     fo << "      use model, only: ";
     int n = 0;
     for (auto id: *this->prog->getSymTab()) {
-        if (isField(id->getName()) || isScal(id->getName())) {
+        if (isField(id->name) || isScal(id->name)) {
             if (n > 0) {
                 fo << ", ";
             }
             n++;
-            fo << id->getName();
+            fo << id->name;
         }
     }
     fo << "\n";
@@ -1153,32 +1152,32 @@ void TopBackEnd::emitCode(FortranOutput& fo) {
 
     for (auto e: *prog->getEqs()) {
         fo << "!------------------------------------------------------------\n";
-        fo << "! Indices for equation " << e->getName() << "\n";
+        fo << "! Indices for equation " << e->name << "\n";
         fo << "!------------------------------------------------------------\n";
-        fo << "      subroutine eqi_" << e->getName() << "()\n\n";
+        fo << "      subroutine eqi_" << e->name << "()\n\n";
         emitUseModel(fo);
         fo << "      use inputs\n";
         fo << "      implicit none\n";
 
-        for (auto t: eqs[e->getName()]) {
+        for (auto t: eqs[e->name]) {
             t->emitInitIndex(fo);
             fo << "\n";
         }
 
-        fo << "      end subroutine eqi_" << e->getName() << "\n";
+        fo << "      end subroutine eqi_" << e->name << "\n";
     }
 
     for (auto e: *prog->getEqs()) {
         fo << "!------------------------------------------------------------\n";
-        fo << "! Coupling coefficients for equation " << e->getName() << "\n";
+        fo << "! Coupling coefficients for equation " << e->name << "\n";
         fo << "!------------------------------------------------------------\n";
-        fo << "      subroutine eq_" << e->getName() << "()\n\n";
+        fo << "      subroutine eq_" << e->name << "()\n\n";
         emitUseModel(fo);
         fo << "      use inputs\n";
         fo << "      use integrales\n";
         fo << "      implicit none\n";
         fo << "      integer i, j, jj\n";
-        for (auto t: eqs[e->getName()]) {
+        for (auto t: eqs[e->name]) {
             if (auto tbc = dynamic_cast<TermBC *>(t)) {
                 this->emitTerm(fo, tbc);
             }
@@ -1187,7 +1186,7 @@ void TopBackEnd::emitCode(FortranOutput& fo) {
             }
             fo << "\n";
         }
-        fo << "      end subroutine eq_" << e->getName() << "\n\n";
+        fo << "      end subroutine eq_" << e->name << "\n\n";
     }
 
     this->emitInitA(fo);
@@ -1204,7 +1203,7 @@ void emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int iarg = 0;
-        fo << fc->getName() << "(";
+        fo << fc->name << "(";
         for (auto arg: *fc->getArgs()) {
             if (iarg++ > 0)
                 fo << ", ";
@@ -1213,9 +1212,9 @@ void emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
         fo << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
-        if (id->getName() == "lvar")
+        if (id->name == "lvar")
             fo << "dm(1)\%";
-        fo << id->getName();
+        fo << id->name;
     }
     else if (auto val = dynamic_cast<ir::Value<int> *>(expr)) {
         fo << val->getValue();
@@ -1235,25 +1234,25 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
     assert(decl);
     ir::Expr *lhs = decl->getLHS();
     if (auto fc = dynamic_cast<ir::FuncCall *>(lhs)) {
-        if (fc->getName() == "lvar") {
+        if (fc->name == "lvar") {
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
-            int ivar = this->ivar(id->getName());
+            int ivar = this->ivar(id->name);
             fo << "      dm(1)\%lvar(1, " << ivar <<
                 ") = ";
             emitDeclRHS(fo, decl->getDef());
-            fo << " ! var: " << id->getName() << "\n";
-            lvar_set[id->getName()] = true;
+            fo << " ! var: " << id->name << "\n";
+            lvar_set[id->name] = true;
         }
-        else if (fc->getName() == "leq") {
+        else if (fc->name == "leq") {
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
-            int ieq = this->ieq(id->getName());
+            int ieq = this->ieq(id->name);
             fo << "      dm(1)\%leq(1, " << ieq <<
                 ") = ";
             emitDeclRHS(fo, decl->getDef());
-            fo << " ! eq: " << id->getName() << "\n";
-            leq_set[id->getName()] = true;
+            fo << " ! eq: " << id->name << "\n";
+            leq_set[id->name] = true;
         }
         else {
             err << "function not allowed in LHS\n";
@@ -1261,7 +1260,7 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
         }
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(lhs)) {
-        fo << "      " << id->getName() << " = ";
+        fo << "      " << id->name << " = ";
         emitDeclRHS(fo, decl->getDef());
         fo << "\n";
     }
@@ -1293,7 +1292,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     for (auto s: *this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
             nvar++;
-            lvar_set[s->getName()] = false;
+            lvar_set[s->name] = false;
         }
         else if (auto p = dynamic_cast<ir::Param *>(s)) {
             std::string type;
@@ -1310,7 +1309,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
                 err << "unsupported type in definition\n";
                 exit(EXIT_FAILURE);
             }
-            inputs << "    " << type << ", save :: " << p->getName() << "\n";
+            inputs << "    " << type << ", save :: " << p->name << "\n";
         }
     }
     inputs << "\n";
@@ -1341,11 +1340,11 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
             }
             else {
                 err << "Unsupported type in definition of parameter `" <<
-                    p->getName() << "\'\n";
+                    p->name << "\'\n";
                 exit(EXIT_FAILURE);
             }
 
-            inputs << "        " << p->getName() << " = fetch('" << p->getName() <<
+            inputs << "        " << p->name << " = fetch('" << p->name <<
                 "', " << default_value << ")\n";
         }
     }
@@ -1369,7 +1368,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs.close();
 
     for (auto e: *prog->getEqs()) {
-        leq_set[e->getName()] = false;;
+        leq_set[e->name] = false;;
     }
 
     fo << "\n      subroutine init_a()\n\n";
@@ -1399,7 +1398,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
         emitDecl(fo, d, lvar_set, leq_set);
     }
     for (auto v: vars) {
-        fo << "      dm(1)%lvar(1, " << ivar(v->getName()) << ") = ";
+        fo << "      dm(1)%lvar(1, " << ivar(v->name) << ") = ";
         if (v->vectComponent == 3)
             fo << "abs(m) + 1 - iparity\n";
         else
@@ -1476,17 +1475,17 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     for (auto s: *this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
             fo << "      dm(1)\%var_name(" << ivar++ << ") = \'" <<
-                s->getName() << "\'\n";
+                s->name << "\'\n";
         }
     }
 
     int ieq = 1;
     for (auto e: *this->prog->getEqs()) {
-        fo << "      dm(1)\%eq_name(" << ieq++ << ") = \'" << e->getName() << "\'\n";
+        fo << "      dm(1)\%eq_name(" << ieq++ << ") = \'" << e->name << "\'\n";
     }
 
     for (auto e: *this->prog->getEqs()) {
-        fo << "      call eqi_" << e->getName() << "()\n";
+        fo << "      call eqi_" << e->name << "()\n";
     }
 
     fo << "      power_max = " << this->powerMax << "\n";
@@ -1516,7 +1515,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     fo << "      enddo\n";
 
     for (auto e: *this->prog->getEqs()) {
-        fo << "      call eq_" << e->getName() << "()\n";
+        fo << "      call eq_" << e->name << "()\n";
     }
 
     bool *eqHasModifyL0 = new bool[this->eqs.size()];
@@ -1526,9 +1525,9 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     std::map<std::string, bool> varLm0Null;
     for (auto v: this->vars) {
         if (v->vectComponent > 1)
-            varLm0Null[v->getName()] = true;
+            varLm0Null[v->name] = true;
         else
-            varLm0Null[v->getName()] = false;
+            varLm0Null[v->name] = false;
     }
 
     for (auto e: eqs) {
@@ -1537,7 +1536,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
             if (t->getType() == AS)
                 eqNeedModifyL0 = false;
             if (auto fc = dynamic_cast<ir::FuncCall *>(t->expr)) {
-                if (std::strstr(fc->getName().c_str(), "Illm") && t->llExpr == NULL) {
+                if (std::strstr(fc->name.c_str(), "Illm") && t->llExpr == NULL) {
                     eqNeedModifyL0 = false;
                 }
             }
@@ -1696,11 +1695,11 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
                     lo << ", ";
                 emitExpr(a);
             }
-            lo << getIntegralLaTeX(fc->getName());
+            lo << getIntegralLaTeX(fc->name);
             lo << "\\ d\\Omega";
         }
         else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
-            lo << escapeLaTeX(fc->getName()) << "\\Big(";
+            lo << escapeLaTeX(fc->name) << "\\Big(";
             int narg = 0;
             for (auto a: *fc->getArgs()) {
                 if (narg++ > 0)
@@ -1710,7 +1709,7 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
             lo << "\\Big)";
         }
         else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
-            lo << escapeLaTeX(id->getName());
+            lo << escapeLaTeX(id->name);
         }
         else if (auto val = dynamic_cast<ir::Value<int> *>(e)) {
             lo << val->getValue();
@@ -1727,17 +1726,17 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
     auto emitVar = [&lo, term] () {
         std::string& der = term->der;
         if (der == "0") {
-            lo << escapeLaTeX(term->var.getName());
+            lo << escapeLaTeX(term->var.name);
         }
         else {
             int der = atoi(term->der.c_str());
             if (der == 1) {
-                lo << "\\frac{\\partial " << escapeLaTeX(term->var.getName()) <<
+                lo << "\\frac{\\partial " << escapeLaTeX(term->var.name) <<
                     "}{\\partial r}";
             }
             else {
                 lo << "\\frac{\\partial^{" << term->der << "} " <<
-                    escapeLaTeX(term->var.getName()) <<
+                    escapeLaTeX(term->var.name) <<
                     "}{\\partial r^{" << term->der << "}}";
             }
         }
@@ -1758,10 +1757,10 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
     lo << "\\begin{document}\n";
     lo << "Filename: \\texttt{" << escapeLaTeX(this->prog->filename) << "}";
     for (auto e: *prog->getEqs()) {
-        lo << "\\subsection*{" << escapeLaTeX(e->getName()) << "}\n";
+        lo << "\\subsection*{" << escapeLaTeX(e->name) << "}\n";
         lo << "\\begin{align*}\n";
         int n = 0;
-        for (auto t: eqs[e->getName()]) {
+        for (auto t: eqs[e->name]) {
             if (t->getType() == AS ||
                     t->getType() == ART ||
                     t->getType() == ARTT) {

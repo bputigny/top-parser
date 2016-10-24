@@ -62,7 +62,7 @@ int main() {
     ir::Expr *root = new ir::BinExpr(x, '+', new ir::BinExpr(v1, '+', v2));
 
     ir::EqLst *eqs = new ir::EqLst();
-    eqs->push_back(new ir::Equation(root, v3, NULL));
+    eqs->push_back(new ir::Equation("testEQ", root, v3, NULL));
     ir::Program *p = new ir::Program("", NULL, NULL, eqs);
 
     // for (auto e: *eqs) {

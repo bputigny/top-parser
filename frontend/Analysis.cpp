@@ -10,7 +10,7 @@ std::vector<ir::Identifier *> getIds(ir::Expr *e, bool uniq) {
         // check if id is already in ret
         if (uniq) {
             for (auto i: ret) {
-                if (i->getName() == id->getName())
+                if (i->name == id->name)
                     add = false;
             }
         }

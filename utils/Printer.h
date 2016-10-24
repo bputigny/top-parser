@@ -23,7 +23,7 @@ class Printer {
         ~Printer();
         std::ostream& stream();
 
-        std::ostream& operator<<(std::string&);
+        std::ostream& operator<<(const std::string);
         std::ostream& operator<<(const char *);
 };
 
