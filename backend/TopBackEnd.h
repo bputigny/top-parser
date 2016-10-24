@@ -109,6 +109,7 @@ class TopBackEnd : public BackEnd {
         int powerMax;
 
         void buildTermList(std::list<ir::Equation *>);
+        void emitDeclRHS(FortranOutput& fo, ir::Expr *expr);
 
         std::list<ir::Equation *> formatEquations();
 

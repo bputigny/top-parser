@@ -19,14 +19,6 @@ field zeta, sint, hh, r_map, r_z, hht, r_t, hhz,
         re_tt, hhzz
 scalar omga, aplat, lambda
 
-# lvar(B)     = abs(m) + iparity
-# lvar(u)     = abs(m) + iparity
-# lvar(v)     = abs(m) + iparity
-# lvar(Pi)    = abs(m) + iparity
-# lvar(Phi)   = abs(m) + iparity
-# lvar(Phie)  = abs(m) + iparity
-# lvar(w)     = abs(m) + 1 - iparity
-
 leq(eqB)    = abs(m) + iparity
 leq(equ)    = abs(m) + iparity
 leq(eqv)    = abs(m) + iparity

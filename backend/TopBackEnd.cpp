@@ -546,6 +546,10 @@ TopBackEnd::TopBackEnd(ir::Program *p) {
     buildVarList();
     std::list<ir::Equation *> eqs = formatEquations();
     buildTermList(eqs);
+
+    // add internal definitions
+    this->prog->getSymTab()->add(new ir::Param("m", "int"));
+    this->prog->getSymTab()->add(new ir::Param("iparity", "int"));
 }
 
 TopBackEnd::~TopBackEnd() { }
@@ -1192,7 +1196,7 @@ void TopBackEnd::emitCode(FortranOutput& fo) {
     this->emitInitA(fo);
 }
 
-void emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
+void TopBackEnd::emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
     assert(expr);
     if (auto be = dynamic_cast<ir::BinExpr *>(expr)) {
         fo << "(";
@@ -1212,6 +1216,10 @@ void emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
         fo << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
+        if (!isDef(id->name)) {
+            err << id->name << " is undefined\n";
+            exit(EXIT_FAILURE);
+        }
         if (id->name == "lvar")
             fo << "dm(1)\%";
         fo << id->name;
@@ -1234,6 +1242,7 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
     assert(decl);
     ir::Expr *lhs = decl->getLHS();
     if (auto fc = dynamic_cast<ir::FuncCall *>(lhs)) {
+#if 0
         if (fc->name == "lvar") {
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
@@ -1244,7 +1253,9 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
             fo << " ! var: " << id->name << "\n";
             lvar_set[id->name] = true;
         }
-        else if (fc->name == "leq") {
+        else
+#endif
+        if (fc->name == "leq") {
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
             int ieq = this->ieq(id->name);
@@ -1585,38 +1596,39 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 std::string escapeLaTeX(const std::string& str) {
     std::string ret(str);
     int n = ret.find("_");
-    if (n >= 0) {
+    while (n >= 0 && n < ret.length()) {
         ret.replace(n, 1, "\\_");
+        n = ret.find("_", n+2);
     }
     return ret;
 }
 
 std::string getIntegralLaTeX(const std::string& coupling) {
-    if (coupling == "Illm") {
+    if (coupling.find("Illm")) {
         return "Y_{l'}^m \\{Y_l^m\\}^*";
     }
-    if (coupling == "Jllm") {
+    if (coupling.find("Jllm")) {
         return "\\partial_{\\theta} Y_{l'}^m \\{Y_l^m\\}^*";
     }
-    if (coupling == "Kllm") {
+    if (coupling.find("Kllm")) {
         return "D_{\\phi} Y_{l'}^m \\{Y_l^m\\}^*";
     }
-    if (coupling == "Jllmc") {
+    if (coupling.find("Jllmc")) {
         return "Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
     }
-    if (coupling == "Lllm") {
+    if (coupling.find("Lllm")) {
         return "\\partial_{\\theta} Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
     }
-    if (coupling == "Mllm") {
+    if (coupling.find("Mllm")) {
         return "D_{\\phi} Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
     }
-    if (coupling == "Kllmc") {
+    if (coupling.find("Kllmc")) {
         return "Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
     }
-    if (coupling == "Mllmc") {
+    if (coupling.find("Mllmc")) {
         return "\\partial_{\\theta} Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
     }
-    if (coupling == "Nllm") {
+    if (coupling.find("Nllm")) {
         return "D_{\\phi} Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
     }
     err << "unknown coupling integral \"" << coupling << "\"\n";
@@ -1756,6 +1768,7 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
     lo << "\\usepackage{amsmath}\n";
     lo << "\\begin{document}\n";
     lo << "Filename: \\texttt{" << escapeLaTeX(this->prog->filename) << "}";
+
     for (auto e: *prog->getEqs()) {
         lo << "\\subsection*{" << escapeLaTeX(e->name) << "}\n";
         lo << "\\begin{align*}\n";
