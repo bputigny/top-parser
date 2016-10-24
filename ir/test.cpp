@@ -63,7 +63,7 @@ int main() {
 
     ir::EqLst *eqs = new ir::EqLst();
     eqs->push_back(new ir::Equation(root, v3, NULL));
-    ir::Program *p = new ir::Program(NULL, NULL, eqs);
+    ir::Program *p = new ir::Program("", NULL, NULL, eqs);
 
     // for (auto e: *eqs) {
     //     e->display("expr");
@@ -103,6 +103,10 @@ int main() {
 
     std::cout << "l' == l': " << (ll == ll2) << "\n";
     std::cout << "l' == l': " << (ll == ll3) << "\n";
+
+    ir::Expr *e = new ir::BinExpr(&i0, '+', &i1);
+    std::cout << "op + priority: " << e->priority << "\n";
+    std::cout << "id priority: " << l.priority << "\n";
 
 #endif
 

@@ -45,7 +45,7 @@ class Term {
         virtual TermType getType();
         std::string getMatrix(IndexType);
         std::string getMatrixI();
-        virtual void emitInitIndex(Output& o);
+        virtual void emitInitIndex(FortranOutput& o);
 };
 
 class TermBC : public Term {
@@ -55,7 +55,7 @@ class TermBC : public Term {
 
         TermBC(Term);
         virtual TermType getType();
-        virtual void emitInitIndex(Output& o);
+        virtual void emitInitIndex(FortranOutput& o);
 };
 
 class TopBackEnd : public BackEnd {
@@ -66,13 +66,13 @@ class TopBackEnd : public BackEnd {
         std::map<std::string, std::list<Term *>> eqs;
 
         std::vector<ir::Expr *> *splitIntoTerms(ir::Expr *);
-        void emitTermI(Output&, Term *);
-        void emitTermI(Output&, TermBC *);
+        void emitTermI(FortranOutput&, Term *);
+        void emitTermI(FortranOutput&, TermBC *);
 
-        void emitTerm(Output&, Term *);
-        void emitTerm(Output&, TermBC *);
+        void emitTerm(FortranOutput&, Term *);
+        void emitTerm(FortranOutput&, TermBC *);
 
-        void emitExpr(ir::Expr *expr, Output& o,
+        void emitExpr(ir::Expr *expr, FortranOutput& o,
                 int ivar,
                 int ieq,
                 bool emitLlExpr = false,
@@ -87,9 +87,9 @@ class TopBackEnd : public BackEnd {
         void simplify(ir::Expr *);
 
         void checkCoupling(ir::Expr *expr);
-        void emitUseModel(Output&);
-        void emitInitA(Output&);
-        void emitDecl(Output&, ir::Decl *,
+        void emitUseModel(FortranOutput&);
+        void emitInitA(FortranOutput&);
+        void emitDecl(FortranOutput&, ir::Decl *,
                 std::map<std::string, bool>&,
                 std::map<std::string, bool>&);
 
@@ -124,7 +124,8 @@ class TopBackEnd : public BackEnd {
         int ieq(std::string);
         TopBackEnd(ir::Program *p);
         ~TopBackEnd();
-        void emitCode(Output& of);
+        void emitCode(FortranOutput& of);
+        void emitLaTeX(LatexOutput& lo);
 };
 
 #endif

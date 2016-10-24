@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <cstdlib>
 
 #define unsupported(e) { \
     err << __FILE__ << ":" << __LINE__ << " unsupported expr\n"; \
@@ -18,7 +19,6 @@
 ir::Identifier fp("fp");
 ir::Identifier l("l");
 ir::UnaryExpr ll(&l, '\'');
-
 
 LlExpr::LlExpr(int ivar, ir::Expr *expr) {
     this->ivar = ivar;
@@ -51,62 +51,67 @@ LlExpr::LlExpr(int ivar, ir::Expr *expr) {
     }
 }
 
-void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
+void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
         int ivar, int ieq, bool emitLlExpr, std::string bcLocation) {
 
+    ir::Expr *llExpr = extractLlExpr(expr);
+    if (llExpr == expr && emitLlExpr == false) {
+        fo << "1d0";
+        return;
+    }
     if (*expr == l) {
         if (emitLlExpr)
-            o << "dm(1)\%lvar(j, " << ivar << ")";
+            fo << "dm(1)\%lvar(j, " << ivar << ")";
         else
-            o << "1d0";
+            fo << "1d0";
         return;
     }
     if (*expr == ll) {
         if (emitLlExpr)
-            o << "dm(1)\%lvar(jj, " << ivar << ")";
+            fo << "dm(1)\%lvar(jj, " << ivar << ")";
         else
-            o << "1d0";
+            fo << "1d0";
         return;
     }
     if (*expr == fp) {
-        o << "1d0";
+        fo << "1d0";
         return;
     }
 
     if (auto be = dynamic_cast<ir::BinExpr *>(expr)) {
-        o << "(";
-        emitExpr(be->getLeftOp(), o, ivar, ieq, emitLlExpr, bcLocation);
+        fo << "(";
+        emitExpr(be->getLeftOp(), fo, ivar, ieq, emitLlExpr, bcLocation);
         switch (be->getOp()) {
             case '^':
-                o << "**";
+                fo << "**";
                 break;
             default:
-                o << be->getOp();
+                fo << be->getOp();
         }
-        emitExpr(be->getRightOp(), o, ivar, ieq, emitLlExpr, bcLocation);
-        o << ")";
+        emitExpr(be->getRightOp(), fo, ivar, ieq, emitLlExpr, bcLocation);
+        fo << ")";
     }
     else if (auto ue = dynamic_cast<ir::UnaryExpr *>(expr)) {
-        o << ue->getOp() << "(";
-        emitExpr(ue->getExpr(), o, ivar, ieq, emitLlExpr, bcLocation);
-        o << ")";
+        fo << ue->getOp() << "(";
+        emitExpr(ue->getExpr(), fo, ivar, ieq, emitLlExpr, bcLocation);
+        fo << ")";
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int narg = 0;
-        o << fc->getName();
-        o << "(";
+        fo << fc->getName();
+        fo << "(";
         for (auto a: *fc->getArgs()) {
             if (narg++ > 0)
-                o << ", ";
-            emitExpr(a, o, ivar, ieq, emitLlExpr, bcLocation);
+                fo << ", ";
+            emitExpr(a, fo, ivar, ieq, emitLlExpr, bcLocation);
         }
-        o << ")";
+        fo << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
         if (isDef(id->getName())) {
-            o << id->getName();
+            fo << id->getName();
             if (bcLocation != "" && isField(id->getName())) {
-                o << "(" << bcLocation << ", 1:lres)";
+                fo << "(" << bcLocation << ", 1:lres)";
             }
         }
         else {
@@ -115,10 +120,10 @@ void TopBackEnd::emitExpr(ir::Expr *expr, Output& o,
         }
     }
     else if (auto v = dynamic_cast<ir::Value<int> *>(expr)) {
-        o << v->getValue();
+        fo << v->getValue();
     }
     else if (auto v = dynamic_cast<ir::Value<float> *>(expr)) {
-        o << v->getValue() << "d0";
+        fo << v->getValue() << "d0";
     }
     else {
         unsupported(expr);
@@ -393,7 +398,7 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
         }
     }
 
-#if 1
+#if 0
     if (llExpr) {
         ir::Expr *newNode = new ir::Value<float>(1.0);
         this->prog->replace(llExpr, newNode);
@@ -933,30 +938,30 @@ int TopBackEnd::findPower(ir::Expr *e) {
     return p;
 }
 
-void TopBackEnd::emitTerm(Output& os, Term *term) {
+void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
     switch(term->getType()) {
         case AS:
         case ART:
-            os << "      " << term->getMatrix(FULL) << " = ";
-            emitExpr(term->expr, os, term->ivar, term->ieq, true);
-            os << "\n";
+            fo << "      " << term->getMatrix(FULL) << " = ";
+            emitExpr(term->expr, fo, term->ivar, term->ieq, true);
+            fo << "\n";
             break;
         case ARTT:
             if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
-                os << "      call " << fc->getName() << "(";
-                emitExpr(arg, os, term->ivar, term->ieq, false);
-                os << ", ";
-                os << " &\n";
-                os << "            & ";
-                os << term->getMatrix(FULL);
-                os << ", &\n";
-                os << "            & ";
-                os << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
-                os << " &\n";
-                os << "            & ";
-                os << "dm(1)\%lvar(1:nt, " << term->ivar << ")";
-                os << ")\n";
+                fo << "      call " << fc->getName() << "(";
+                emitExpr(arg, fo, term->ivar, term->ieq, false);
+                fo << ", ";
+                fo << " &\n";
+                fo << "            & ";
+                fo << term->getMatrix(FULL);
+                fo << ", &\n";
+                fo << "            & ";
+                fo << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
+                fo << " &\n";
+                fo << "            & ";
+                fo << "dm(1)\%lvar(1:nt, " << term->ivar << ")";
+                fo << ")\n";
             }
             else {
                 err << "ARTT terms should always have coupling integral expression\n";
@@ -971,17 +976,17 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
     if (term->llExpr) {
         if (term->llExpr->type == "l") {
             if (term->getType() == ART) {
-                os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix(T) <<
+                fo << "      do j=1, nt\n";
+                fo << "            " << term->getMatrix(T) <<
                     " = &\n";
-                os << "                  " << term->getMatrix(T) <<
+                fo << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ARTT ){
-                os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix(T) <<
+                fo << "      do j=1, nt\n";
+                fo << "            " << term->getMatrix(T) <<
                     " = &\n";
-                os << "                  " << term->getMatrix(T) <<
+                fo << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
             else {
@@ -990,45 +995,45 @@ void TopBackEnd::emitTerm(Output& os, Term *term) {
             }
         }
         else if (term->llExpr->type == "ll") {
-            os << "      do jj=1, nt\n";
-            os << "            " << term->getMatrix(TT) << " = &\n";
-            os << "                  & " << term->getMatrix(TT) <<
+            fo << "      do jj=1, nt\n";
+            fo << "            " << term->getMatrix(TT) << " = &\n";
+            fo << "                  & " << term->getMatrix(TT) <<
                 " " << term->llExpr->op << " &\n";
         }
         else {
             err << "\n";
             exit(EXIT_FAILURE);
         }
-        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq, true);
-        os << "\n      end do\n";
+        emitExpr(term->llExpr->expr, fo, term->llExpr->ivar, term->ieq, true);
+        fo << "\n      end do\n";
     }
 }
 
-void TopBackEnd::emitTerm(Output& os, TermBC *term) {
+void TopBackEnd::emitTerm(FortranOutput& fo, TermBC *term) {
     std::string bcLoc = term->varLoc;
     switch(term->getType()) {
         case ATBC:
-            os << "      " << term->getMatrix(FULL) << " = ";
-            emitExpr(term->expr, os, term->ivar, term->ieq, true, bcLoc);
-            os << "\n";
+            fo << "      " << term->getMatrix(FULL) << " = ";
+            emitExpr(term->expr, fo, term->ivar, term->ieq, true, bcLoc);
+            fo << "\n";
             break;
         case ATTBC:
             if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
-                os << "      call " << fc->getName() << "bc(";
-                emitExpr(arg, os, term->ivar, term->ieq, false, bcLoc);
-                os << ", ";
-                os << " &" << "\n";
-                os << "            & ";
-                os << term->getMatrix(FULL);
-                os << ",";
-                os << " &" << "\n";
-                os << "            & ";
-                os << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
-                os << " &" << "\n";
-                os << "            & ";
-                os << "dm(1)\%lvar(1:nt, " << term->ivar << ")";
-                os << ")\n";
+                fo << "      call " << fc->getName() << "bc(";
+                emitExpr(arg, fo, term->ivar, term->ieq, false, bcLoc);
+                fo << ", ";
+                fo << " &" << "\n";
+                fo << "            & ";
+                fo << term->getMatrix(FULL);
+                fo << ",";
+                fo << " &" << "\n";
+                fo << "            & ";
+                fo << "dm(1)\%leq(1:nt, " << term->ieq << "), ";
+                fo << " &" << "\n";
+                fo << "            & ";
+                fo << "dm(1)\%lvar(1:nt, " << term->ivar << ")";
+                fo << ")\n";
             }
             else {
                 err << "ARTT terms should always have coupling integral expression\n";
@@ -1044,17 +1049,17 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
     if (term->llExpr) {
         if (term->llExpr->type == "l") {
             if (term->getType() == ATBC) {
-                os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix(T) <<
+                fo << "      do j=1, nt\n";
+                fo << "            " << term->getMatrix(T) <<
                     " = &\n";
-                os << "                  " << term->getMatrix(T) <<
+                fo << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ATTBC ){
-                os << "      do j=1, nt\n";
-                os << "            " << term->getMatrix(T) <<
+                fo << "      do j=1, nt\n";
+                fo << "            " << term->getMatrix(T) <<
                     " = &\n";
-                os << "                  " << term->getMatrix(T) <<
+                fo << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
             else {
@@ -1063,38 +1068,38 @@ void TopBackEnd::emitTerm(Output& os, TermBC *term) {
             }
         }
         else if (term->llExpr->type == "ll") {
-            os << "      do jj=1, nt\n";
-            os << "            " << term->getMatrix(TT) <<
+            fo << "      do jj=1, nt\n";
+            fo << "            " << term->getMatrix(TT) <<
                 " = &\n";
-            os << "                  " << term->getMatrix(TT) <<
+            fo << "                  " << term->getMatrix(TT) <<
                 " " << term->llExpr->op << " &\n";
         }
         else {
             err << "\n";
             exit(EXIT_FAILURE);
         }
-        os << "                  ";
-        emitExpr(term->llExpr->expr, os, term->llExpr->ivar, term->ieq, true, bcLoc);
-        os << "\n      end do\n";
+        fo << "                  ";
+        emitExpr(term->llExpr->expr, fo, term->llExpr->ivar, term->ieq, true, bcLoc);
+        fo << "\n      end do\n";
     }
 }
 
-void Term::emitInitIndex(Output& o) {
-    o << "      " << this->getMatrixI() << "(1, " << this->idx << ") = " <<
+void Term::emitInitIndex(FortranOutput& fo) {
+    fo << "      " << this->getMatrixI() << "(1, " << this->idx << ") = " <<
         this->power << " ! power\n";
-    o << "      " << this->getMatrixI() << "(2, " << this->idx << ") = " <<
+    fo << "      " << this->getMatrixI() << "(2, " << this->idx << ") = " <<
         this->der << " ! der order\n";
-    o << "      " << this->getMatrixI() << "(3, " << this->idx << ") = " <<
+    fo << "      " << this->getMatrixI() << "(3, " << this->idx << ") = " <<
         this->ieq << " ! ieq (eq: " << this->eqName << ")\n";
-    o << "      " << this->getMatrixI() << "(4, " << this->idx << ") = " <<
+    fo << "      " << this->getMatrixI() << "(4, " << this->idx << ") = " <<
         this->ivar << " ! ivar (var: " << this->varName << ")\n";
 }
 
-void TermBC::emitInitIndex(Output& o) {
-    Term::emitInitIndex(o);
-    o << "      " << this->getMatrixI() << "(5, " << this->idx << ") = " <<
+void TermBC::emitInitIndex(FortranOutput& fo) {
+    Term::emitInitIndex(fo);
+    fo << "      " << this->getMatrixI() << "(5, " << this->idx << ") = " <<
         this->eqLoc << " ! eq location\n";
-    o << "      " << this->getMatrixI() << "(6, " << this->idx << ") = " <<
+    fo << "      " << this->getMatrixI() << "(6, " << this->idx << ") = " <<
         this->varLoc << " ! var location\n";
 }
 
@@ -1129,94 +1134,94 @@ void TopBackEnd::buildVarList() {
     }
 }
 
-void TopBackEnd::emitUseModel(Output& os) {
-    os << "      use model, only: ";
+void TopBackEnd::emitUseModel(FortranOutput& fo) {
+    fo << "      use model, only: ";
     int n = 0;
     for (auto id: *this->prog->getSymTab()) {
         if (isField(id->getName()) || isScal(id->getName())) {
             if (n > 0) {
-                os << ", ";
+                fo << ", ";
             }
             n++;
-            os << id->getName();
+            fo << id->getName();
         }
     }
-    os << "\n";
+    fo << "\n";
 }
 
-void TopBackEnd::emitCode(Output& os) {
+void TopBackEnd::emitCode(FortranOutput& fo) {
 
     for (auto e: *prog->getEqs()) {
-        os << "!------------------------------------------------------------\n";
-        os << "! Indices for equation " << e->getName() << "\n";
-        os << "!------------------------------------------------------------\n";
-        os << "      subroutine eqi_" << e->getName() << "()\n\n";
-        emitUseModel(os);
-        os << "      use inputs\n";
-        os << "      implicit none\n";
+        fo << "!------------------------------------------------------------\n";
+        fo << "! Indices for equation " << e->getName() << "\n";
+        fo << "!------------------------------------------------------------\n";
+        fo << "      subroutine eqi_" << e->getName() << "()\n\n";
+        emitUseModel(fo);
+        fo << "      use inputs\n";
+        fo << "      implicit none\n";
 
         for (auto t: eqs[e->getName()]) {
-            t->emitInitIndex(os);
-            os << "\n";
+            t->emitInitIndex(fo);
+            fo << "\n";
         }
 
-        os << "      end subroutine eqi_" << e->getName() << "\n";
+        fo << "      end subroutine eqi_" << e->getName() << "\n";
     }
 
     for (auto e: *prog->getEqs()) {
-        os << "!------------------------------------------------------------\n";
-        os << "! Coupling coefficients for equation " << e->getName() << "\n";
-        os << "!------------------------------------------------------------\n";
-        os << "      subroutine eq_" << e->getName() << "()\n\n";
-        emitUseModel(os);
-        os << "      use inputs\n";
-        os << "      use integrales\n";
-        os << "      implicit none\n";
-        os << "      integer i, j, jj\n";
+        fo << "!------------------------------------------------------------\n";
+        fo << "! Coupling coefficients for equation " << e->getName() << "\n";
+        fo << "!------------------------------------------------------------\n";
+        fo << "      subroutine eq_" << e->getName() << "()\n\n";
+        emitUseModel(fo);
+        fo << "      use inputs\n";
+        fo << "      use integrales\n";
+        fo << "      implicit none\n";
+        fo << "      integer i, j, jj\n";
         for (auto t: eqs[e->getName()]) {
             if (auto tbc = dynamic_cast<TermBC *>(t)) {
-                this->emitTerm(os, tbc);
+                this->emitTerm(fo, tbc);
             }
             else {
-                this->emitTerm(os, t);
+                this->emitTerm(fo, t);
             }
-            os << "\n";
+            fo << "\n";
         }
-        os << "      end subroutine eq_" << e->getName() << "\n\n";
+        fo << "      end subroutine eq_" << e->getName() << "\n\n";
     }
 
-    this->emitInitA(os);
+    this->emitInitA(fo);
 }
 
-void emitDeclRHS(Output& os, ir::Expr *expr) {
+void emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
     assert(expr);
     if (auto be = dynamic_cast<ir::BinExpr *>(expr)) {
-        os << "(";
-        emitDeclRHS(os, be->getLeftOp());
-        os << be->getOp();
-        emitDeclRHS(os, be->getRightOp());
-        os << ")";
+        fo << "(";
+        emitDeclRHS(fo, be->getLeftOp());
+        fo << be->getOp();
+        emitDeclRHS(fo, be->getRightOp());
+        fo << ")";
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int iarg = 0;
-        os << fc->getName() << "(";
+        fo << fc->getName() << "(";
         for (auto arg: *fc->getArgs()) {
             if (iarg++ > 0)
-                os << ", ";
-            emitDeclRHS(os, arg);
+                fo << ", ";
+            emitDeclRHS(fo, arg);
         }
-        os << ")";
+        fo << ")";
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(expr)) {
         if (id->getName() == "lvar")
-            os << "dm(1)\%";
-        os << id->getName();
+            fo << "dm(1)\%";
+        fo << id->getName();
     }
     else if (auto val = dynamic_cast<ir::Value<int> *>(expr)) {
-        os << val->getValue();
+        fo << val->getValue();
     }
     else if (auto val = dynamic_cast<ir::Value<float> *>(expr)) {
-        os << val->getValue() << "d0";
+        fo << val->getValue() << "d0";
     }
     else {
         err << "skipped term!!\n";
@@ -1224,7 +1229,7 @@ void emitDeclRHS(Output& os, ir::Expr *expr) {
     }
 }
 
-void TopBackEnd::emitDecl(Output& os, ir::Decl *decl,
+void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
         std::map<std::string, bool>& lvar_set,
         std::map<std::string, bool>& leq_set) {
     assert(decl);
@@ -1234,20 +1239,20 @@ void TopBackEnd::emitDecl(Output& os, ir::Decl *decl,
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
             int ivar = this->ivar(id->getName());
-            os << "      dm(1)\%lvar(1, " << ivar <<
+            fo << "      dm(1)\%lvar(1, " << ivar <<
                 ") = ";
-            emitDeclRHS(os, decl->getDef());
-            os << " ! var: " << id->getName() << "\n";
+            emitDeclRHS(fo, decl->getDef());
+            fo << " ! var: " << id->getName() << "\n";
             lvar_set[id->getName()] = true;
         }
         else if (fc->getName() == "leq") {
             ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
             assert(id);
             int ieq = this->ieq(id->getName());
-            os << "      dm(1)\%leq(1, " << ieq <<
+            fo << "      dm(1)\%leq(1, " << ieq <<
                 ") = ";
-            emitDeclRHS(os, decl->getDef());
-            os << " ! eq: " << id->getName() << "\n";
+            emitDeclRHS(fo, decl->getDef());
+            fo << " ! eq: " << id->getName() << "\n";
             leq_set[id->getName()] = true;
         }
         else {
@@ -1256,9 +1261,9 @@ void TopBackEnd::emitDecl(Output& os, ir::Decl *decl,
         }
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(lhs)) {
-        os << "      " << id->getName() << " = ";
-        emitDeclRHS(os, decl->getDef());
-        os << "\n";
+        fo << "      " << id->getName() << " = ";
+        emitDeclRHS(fo, decl->getDef());
+        fo << "\n";
     }
     else {
         err << "unsupported definition: " << *lhs << "\n";
@@ -1266,7 +1271,7 @@ void TopBackEnd::emitDecl(Output& os, ir::Decl *decl,
     }
 }
 
-void TopBackEnd::emitInitA(Output& os) {
+void TopBackEnd::emitInitA(FortranOutput& fo) {
     int nvar = 0;
     int neq = this->prog->getEqs()->size();
 
@@ -1367,31 +1372,31 @@ void TopBackEnd::emitInitA(Output& os) {
         leq_set[e->getName()] = false;;
     }
 
-    os << "\n      subroutine init_a()\n\n";
+    fo << "\n      subroutine init_a()\n\n";
 
-    os << "      use model\n";
-    os << "      use integrales\n\n";
+    fo << "      use model\n";
+    fo << "      use integrales\n\n";
 
-    os << "      implicit none\n";
-    os << "      integer j, der_min, der_max\n\n";
+    fo << "      implicit none\n";
+    fo << "      integer j, der_min, der_max\n\n";
 
-    os << "      grd(1)%mattype = mattype\n";
-    os << "      nr => grd(1)\%nr\n";
-    os << "      if (allocated(dm)) then\n";
-    os << "            call clear_all()\n";
-    os << "      endif\n\n";
+    fo << "      grd(1)%mattype = mattype\n";
+    fo << "      nr => grd(1)\%nr\n";
+    fo << "      if (allocated(dm)) then\n";
+    fo << "            call clear_all()\n";
+    fo << "      endif\n\n";
 
-    os << "      allocate(dm(1))\n";
-    os << "      allocate(dmat(1))\n";
-    os << "      allocate(idm(1, 1))\n\n";
+    fo << "      allocate(dm(1))\n";
+    fo << "      allocate(dmat(1))\n";
+    fo << "      allocate(idm(1, 1))\n\n";
 
 
-    os << "      dm(1)\%nvar = " << nvar << "\n";
-    os << "      allocate(dm(1)\%lvar(nt, " << nvar << "))\n";
-    os << "      allocate(dm(1)\%leq(nt, " << neq << "))\n\n";
+    fo << "      dm(1)\%nvar = " << nvar << "\n";
+    fo << "      allocate(dm(1)\%lvar(nt, " << nvar << "))\n";
+    fo << "      allocate(dm(1)\%leq(nt, " << neq << "))\n\n";
 
     for (auto d: *prog->getDecls()) {
-        emitDecl(os, d, lvar_set, leq_set);
+        emitDecl(fo, d, lvar_set, leq_set);
     }
 
     for (auto lv: lvar_set) {
@@ -1408,103 +1413,103 @@ void TopBackEnd::emitInitA(Output& os) {
     }
 
     for (int i=1; i<=nvar; i++) {
-        os << "      do j=2, nt\n";
-        os << "            dm(1)\%lvar(j, " << i<< ") = 2 + dm(1)\%lvar(j-1, " <<
+        fo << "      do j=2, nt\n";
+        fo << "            dm(1)\%lvar(j, " << i<< ") = 2 + dm(1)\%lvar(j-1, " <<
             i << ")\n";
-        os << "      enddo\n";
+        fo << "      enddo\n";
     }
-    os << "\n";
+    fo << "\n";
     for (int i=1; i<=neq; i++) {
-        os << "      do j=2, nt\n";
-        os << "            dm(1)\%leq(j, " << i<< ") = 2 + dm(1)\%leq(j-1, " <<
+        fo << "      do j=2, nt\n";
+        fo << "            dm(1)\%leq(j, " << i<< ") = 2 + dm(1)\%leq(j-1, " <<
             i << ")\n";
-        os << "      enddo\n";
+        fo << "      enddo\n";
     }
-    os << "\n";
+    fo << "\n";
 
 
-    os << "      dm(1)\%offset = 0\n";
-    os << "      dm(1)\%nas = " << nas << "\n";
-    os << "      dm(1)\%nart = " << nart << "\n";
-    os << "      dm(1)\%nartt = " << nartt << "\n";
-    os << "      idm(1,1)\%natbc = " << natbc << "\n";
-    os << "      idm(1,1)\%nattbc = " << nattbc << "\n";
+    fo << "      dm(1)\%offset = 0\n";
+    fo << "      dm(1)\%nas = " << nas << "\n";
+    fo << "      dm(1)\%nart = " << nart << "\n";
+    fo << "      dm(1)\%nartt = " << nartt << "\n";
+    fo << "      idm(1,1)\%natbc = " << natbc << "\n";
+    fo << "      idm(1,1)\%nattbc = " << nattbc << "\n";
 
-    os << "      allocate(dm(1)\%as(dm(1)\%nas))\n";
-    os << "      allocate(dm(1)\%asi(4, dm(1)\%nas))\n";
-    os << "      dm(1)\%as = 0d0\n";
-    os << "      dm(1)\%asi = 0\n\n";
+    fo << "      allocate(dm(1)\%as(dm(1)\%nas))\n";
+    fo << "      allocate(dm(1)\%asi(4, dm(1)\%nas))\n";
+    fo << "      dm(1)\%as = 0d0\n";
+    fo << "      dm(1)\%asi = 0\n\n";
 
-    os << "      allocate(dm(1)\%art(grd(1)\%nr, nt, dm(1)\%nart))\n";
-    os << "      allocate(dm(1)\%arti(4, dm(1)\%nart))\n";
-    os << "      dm(1)\%art = 0d0\n";
-    os << "      dm(1)\%arti = 0\n\n";
+    fo << "      allocate(dm(1)\%art(grd(1)\%nr, nt, dm(1)\%nart))\n";
+    fo << "      allocate(dm(1)\%arti(4, dm(1)\%nart))\n";
+    fo << "      dm(1)\%art = 0d0\n";
+    fo << "      dm(1)\%arti = 0\n\n";
 
-    os << "      allocate(dm(1)\%artt(grd(1)\%nr, nt, nt, dm(1)\%nartt))\n";
-    os << "      allocate(dm(1)\%artti(4, dm(1)\%nartt))\n";
-    os << "      dm(1)\%artt = 0d0\n";
-    os << "      dm(1)\%artti = 0\n\n";
+    fo << "      allocate(dm(1)\%artt(grd(1)\%nr, nt, nt, dm(1)\%nartt))\n";
+    fo << "      allocate(dm(1)\%artti(4, dm(1)\%nartt))\n";
+    fo << "      dm(1)\%artt = 0d0\n";
+    fo << "      dm(1)\%artti = 0\n\n";
 
-    os << "      allocate(idm(1, 1)\%atbc(nt, idm(1, 1)\%natbc))\n";
-    os << "      allocate(idm(1, 1)\%atbci(6, idm(1, 1)\%natbc))\n";
-    os << "      idm(1, 1)\%atbc = 0d0\n";
-    os << "      idm(1, 1)\%atbci = 0\n\n";
+    fo << "      allocate(idm(1, 1)\%atbc(nt, idm(1, 1)\%natbc))\n";
+    fo << "      allocate(idm(1, 1)\%atbci(6, idm(1, 1)\%natbc))\n";
+    fo << "      idm(1, 1)\%atbc = 0d0\n";
+    fo << "      idm(1, 1)\%atbci = 0\n\n";
 
-    os << "      allocate(idm(1, 1)\%attbc(nt, nt, idm(1, 1)\%nattbc))\n";
-    os << "      allocate(idm(1, 1)\%attbci(6, idm(1, 1)\%nattbc))\n";
-    os << "      idm(1, 1)\%attbc = 0d0\n";
-    os << "      idm(1, 1)\%attbci = 0\n\n";
+    fo << "      allocate(idm(1, 1)\%attbc(nt, nt, idm(1, 1)\%nattbc))\n";
+    fo << "      allocate(idm(1, 1)\%attbci(6, idm(1, 1)\%nattbc))\n";
+    fo << "      idm(1, 1)\%attbc = 0d0\n";
+    fo << "      idm(1, 1)\%attbci = 0\n\n";
 
-    os << "      allocate(dm(1)\%var_name(" << nvar << "))\n";
-    os << "      allocate(dm(1)\%var_keep(" << nvar << "))\n";
-    os << "      allocate(dm(1)\%eq_name(" << neq << "))\n\n";
-    os << "      dm(1)\%var_keep = .true.\n\n";
+    fo << "      allocate(dm(1)\%var_name(" << nvar << "))\n";
+    fo << "      allocate(dm(1)\%var_keep(" << nvar << "))\n";
+    fo << "      allocate(dm(1)\%eq_name(" << neq << "))\n\n";
+    fo << "      dm(1)\%var_keep = .true.\n\n";
 
     int ivar = 1;
     for (auto s: *this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
-            os << "      dm(1)\%var_name(" << ivar++ << ") = \'" <<
+            fo << "      dm(1)\%var_name(" << ivar++ << ") = \'" <<
                 s->getName() << "\'\n";
         }
     }
 
     int ieq = 1;
     for (auto e: *this->prog->getEqs()) {
-        os << "      dm(1)\%eq_name(" << ieq++ << ") = \'" << e->getName() << "\'\n";
+        fo << "      dm(1)\%eq_name(" << ieq++ << ") = \'" << e->getName() << "\'\n";
     }
 
     for (auto e: *this->prog->getEqs()) {
-        os << "      call eqi_" << e->getName() << "()\n";
+        fo << "      call eqi_" << e->getName() << "()\n";
     }
 
-    os << "      power_max = " << this->powerMax << "\n";
-    os << "      a_dim = nt*grd(1)\%nr*dm(1)\%nvar\n";
-    os << "      dm(1)\%d_dim = a_dim\n";
-    os << "      call find_llmax()\n";
-    os << "      print*, 'Dimension of problem: ', a_dim\n";
+    fo << "      power_max = " << this->powerMax << "\n";
+    fo << "      a_dim = nt*grd(1)\%nr*dm(1)\%nvar\n";
+    fo << "      dm(1)\%d_dim = a_dim\n";
+    fo << "      call find_llmax()\n";
+    fo << "      print*, 'Dimension of problem: ', a_dim\n";
 
-    os << "      call find_der_range(der_min, der_max)\n";
-    os << "      if (allocated(dm(1)\%vect_der)) deallocate(dm(1)\%vect_der)\n";
-    os << "      allocate(dm(1)\%vect_der(a_dim, der_min:der_max))\n";
+    fo << "      call find_der_range(der_min, der_max)\n";
+    fo << "      if (allocated(dm(1)\%vect_der)) deallocate(dm(1)\%vect_der)\n";
+    fo << "      allocate(dm(1)\%vect_der(a_dim, der_min:der_max))\n";
 
-    os << "      if (.not.first_dmat) call clear_derive(dmat(1))\n";
-    os << "      call init_derive(dmat(1), grd(1)\%r, grd(1)\%nr, der_max, " <<
+    fo << "      if (.not.first_dmat) call clear_derive(dmat(1))\n";
+    fo << "      call init_derive(dmat(1), grd(1)\%r, grd(1)\%nr, der_max, " <<
         "der_min, orderFD, dertype)\n";
-    os << "      first_dmat = .false.\n";
-    os << "      call init_var_list()\n";
+    fo << "      first_dmat = .false.\n";
+    fo << "      call init_var_list()\n";
 
-    os << "      ! lmax = maxval(dm(1)\%lvar)\n";
-    os << "      call initialisation(nt, nr, m, lres, llmax)\n\n";
-    os << "      call init_avg(dmat(1)\%derive(:, :, 0), dmat(1)\%lbder(0), " << 
+    fo << "      ! lmax = maxval(dm(1)\%lvar)\n";
+    fo << "      call initialisation(nt, nr, m, lres, llmax)\n\n";
+    fo << "      call init_avg(dmat(1)\%derive(:, :, 0), dmat(1)\%lbder(0), " << 
         "dmat(1)\%ubder(0))\n\n";
 
-    os << "      do j=1, nt\n";
-    os << "            ! zeta(1, j) = 1d0\n";
-    os << "            ! r_map(1, j) = 1d0\n";
-    os << "      enddo\n";
+    fo << "      do j=1, nt\n";
+    fo << "            ! zeta(1, j) = 1d0\n";
+    fo << "            ! r_map(1, j) = 1d0\n";
+    fo << "      enddo\n";
 
     for (auto e: *this->prog->getEqs()) {
-        os << "      call eq_" << e->getName() << "()\n";
+        fo << "      call eq_" << e->getName() << "()\n";
     }
 
     bool *eqHasModifyL0 = new bool[this->eqs.size()];
@@ -1544,14 +1549,14 @@ void TopBackEnd::emitInitA(Output& os) {
                         && (e.first == "eq" + t->varName)
 #endif
                         ) {
-                    t->expr->display(e.first + ": modify_l0 on term: (var: " +
-                           t->varName + "), (power: " + std::to_string(t->power) + ")");
+                    // t->expr->display(e.first + ": modify_l0 on term: (var: " +
+                    //        t->varName + "), (power: " + std::to_string(t->power) + ")");
                     modifyCalled = true;
                     varLm0Null[t->varName] = false; // do not set twice
-                    os << "      call modify_l0(" <<  t->getMatrix(FULL);
-                    os << ", ";
-                    os << "dm(1)\%lvar(1, " << t->ivar << ")";
-                    os << ")\n";
+                    fo << "      call modify_l0(" <<  t->getMatrix(FULL);
+                    fo << ", ";
+                    fo << "dm(1)\%lvar(1, " << t->ivar << ")";
+                    fo << ")\n";
                     break;
                 }
             }
@@ -1563,18 +1568,223 @@ void TopBackEnd::emitInitA(Output& os) {
         }
 
     }
-   os << "      do j=1, nt\n";
-   os << "            zeta(1, j) = 0d0\n";
-   os << "            r_map(1, j) = 0d0\n";
-   os << "      enddo\n";
+   fo << "      do j=1, nt\n";
+   fo << "            zeta(1, j) = 0d0\n";
+   fo << "            r_map(1, j) = 0d0\n";
+   fo << "      enddo\n";
 
-   os << "      call integrales_clear()\n";
+   fo << "      call integrales_clear()\n";
 
-   os << "      call dump_coef()\n";
+   fo << "      call dump_coef()\n";
 
 
-   os << "\n      end subroutine init_a\n";
+   fo << "\n      end subroutine init_a\n";
 
+}
+
+std::string escapeLaTeX(const std::string& str) {
+    std::string ret(str);
+    int n = ret.find("_");
+    if (n >= 0) {
+        ret.replace(n, 1, "\\_");
+    }
+    return ret;
+}
+
+std::string getIntegralLaTeX(const std::string& coupling) {
+    if (coupling == "Illm") {
+        return "Y_{l'}^m \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Jllm") {
+        return "\\partial_{\\theta} Y_{l'}^m \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Kllm") {
+        return "D_{\\phi} Y_{l'}^m \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Jllmc") {
+        return "Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Lllm") {
+        return "\\partial_{\\theta} Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Mllm") {
+        return "D_{\\phi} Y_{l'}^m \\partial_{\\theta} \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Kllmc") {
+        return "Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Mllmc") {
+        return "\\partial_{\\theta} Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
+    }
+    if (coupling == "Nllm") {
+        return "D_{\\phi} Y_{l'}^m D_{\\phi} \\{Y_l^m\\}^*";
+    }
+    err << "unknown coupling integral \"" << coupling << "\"\n";
+    exit(EXIT_FAILURE);
+}
+
+void emitTermLaTeX(LatexOutput& lo, Term *term) {
+    auto emitPower = [&lo, term] () {
+        if (term->power > 0)
+            lo << "fp";
+        if (term->power > 1)
+            lo << "^" << term->power;
+        if (term->power > 0)
+            lo << " * ";
+    };
+
+    std::function<void (ir::Expr *)> emitExpr = [&lo, term, &emitExpr] (ir::Expr *e) {
+        if (*e == l) {
+            lo << "l";
+            return;
+        }
+        if (*e == ll) {
+            lo << "l'";
+            return;
+        }
+        if (*e == fp) {
+            lo << "1";
+            return;
+        }
+        if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
+            if (ue->getOp() != '-')
+                unsupported(ue);
+            lo << "-";
+            emitExpr(ue->getExpr());
+        }
+        else if (auto be = dynamic_cast<ir::BinExpr *>(e)) {
+            if (be->getOp() == '/') {
+                lo << "\\frac{";
+                emitExpr(be->getLeftOp());
+                lo << "}{";
+                emitExpr(be->getRightOp());
+                lo << "}";
+            }
+            else if (be->getOp() == '^') {
+                emitExpr(be->getLeftOp());
+                lo << "^{";
+                emitExpr(be->getRightOp());
+                lo << "}";
+
+            }
+            else {
+                if (be->getLeftOp()->priority < be->priority) {
+                    lo << "(";
+                }
+                emitExpr(be->getLeftOp());
+                if (be->getLeftOp()->priority < be->priority)
+                    lo << ")";
+                if (be->getOp() == '*')
+                    lo << "\\ ";
+                else
+                    lo << be->getOp();
+
+                if (be->getRightOp()->priority < be->priority) {
+                    lo << "(";
+                }
+                emitExpr(be->getRightOp());
+                if (be->getRightOp()->priority < be->priority)
+                    lo << ")";
+            }
+        }
+        else if (auto fc = isCoupling(e)) {
+            lo << "\\iint_{4 \\pi}";
+            int narg = 0;
+            for (auto a: *fc->getArgs()) {
+                if (narg++ > 0)
+                    lo << ", ";
+                emitExpr(a);
+            }
+            lo << getIntegralLaTeX(fc->getName());
+            lo << "\\ d\\Omega";
+        }
+        else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
+            lo << escapeLaTeX(fc->getName()) << "\\Big(";
+            int narg = 0;
+            for (auto a: *fc->getArgs()) {
+                if (narg++ > 0)
+                    lo << ", ";
+                emitExpr(a);
+            }
+            lo << "\\Big)";
+        }
+        else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
+            lo << escapeLaTeX(id->getName());
+        }
+        else if (auto val = dynamic_cast<ir::Value<int> *>(e)) {
+            lo << val->getValue();
+        }
+        else if (auto val = dynamic_cast<ir::Value<float> *>(e)) {
+            lo << val->getValue();
+        }
+        else {
+            unsupported(e);
+            exit(EXIT_FAILURE);
+        }
+    };
+
+    auto emitVar = [&lo, term] () {
+        std::string& der = term->der;
+        if (der == "0") {
+            lo << escapeLaTeX(term->var.getName());
+        }
+        else {
+            int der = atoi(term->der.c_str());
+            if (der == 1) {
+                lo << "\\frac{\\partial " << escapeLaTeX(term->var.getName()) <<
+                    "}{\\partial r}";
+            }
+            else {
+                lo << "\\frac{\\partial^{" << term->der << "} " <<
+                    escapeLaTeX(term->var.getName()) <<
+                    "}{\\partial r^{" << term->der << "}}";
+            }
+        }
+    };
+
+    emitPower();
+    if (auto ue = dynamic_cast<ir::UnaryExpr *>(term->expr))
+        emitExpr(ue->getExpr());
+    else
+        emitExpr(term->expr);
+    lo << " &\\ * ";
+    emitVar();
+}
+
+void TopBackEnd::emitLaTeX(LatexOutput& lo) {
+    lo << "\\documentclass[10pt]{article}\n";
+    lo << "\\usepackage{amsmath}\n";
+    lo << "\\begin{document}\n";
+    lo << "Filename: \\texttt{" << escapeLaTeX(this->prog->filename) << "}";
+    for (auto e: *prog->getEqs()) {
+        lo << "\\subsection*{" << escapeLaTeX(e->getName()) << "}\n";
+        lo << "\\begin{align*}\n";
+        int n = 0;
+        for (auto t: eqs[e->getName()]) {
+            if (t->getType() == AS ||
+                    t->getType() == ART ||
+                    t->getType() == ARTT) {
+                if (auto ue = dynamic_cast<ir::UnaryExpr *>(t->expr)) {
+                    if (ue->getOp() != '-') {
+                        unsupported(ue);
+                    }
+                    lo << "&-";
+                    lo << "\\\\\n";
+                }
+                else {
+                    if (n > 0) {
+                        lo << "&+";
+                        lo << "\\\\\n";
+                    }
+                }
+                emitTermLaTeX(lo, t);
+                n++;
+            }
+        }
+        lo << " & = 0\n";
+        lo << "\\end{align*}\n";
+    }
+    lo << "\\end{document}\n";
 }
 
 #undef unsupported

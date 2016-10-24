@@ -49,14 +49,17 @@ class Node : public DOT {
 class Expr : public Node {
     public:
         Expr(Node *p = NULL);
+        Expr(int priority, Node *p = NULL);
         virtual ~Expr();
+
+        const int priority;
 };
 
 template <class T>
 class Value : public Expr {
     T value;
     public:
-        inline Value(T val, Node *p = NULL) : Expr(p) {
+        inline Value(T val, Node *p = NULL) {
             value = val;
         }
         inline T getValue() {
@@ -222,7 +225,7 @@ class Program : public DOT {
         EqLst *eqs;
 
     public:
-        Program(SymTab *, DeclLst *decls, EqLst *eqs);
+        Program(std::string, SymTab *, DeclLst *decls, EqLst *eqs);
         void buildSymTab();
         virtual void dumpDOT(std::ostream& os, std::string title, bool root = true) const;
         SymTab *getSymTab();
@@ -230,6 +233,8 @@ class Program : public DOT {
         DeclLst *getDecls();
 
         void replace(Node *, Node *);
+
+        const std::string filename;
 };
 
 class IndexRange : public BinExpr {

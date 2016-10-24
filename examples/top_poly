@@ -10,6 +10,7 @@ param double pindex
 
 param double Gamma1, gamma_p, pder, uder
 
+# var B, (u, v, w), Pi, ...
 var B, u, v, Pi, Phi, Phie, w
 
 field zeta, sint, hh, r_map, r_z, hht, r_t, hhz,

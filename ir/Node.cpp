@@ -51,7 +51,7 @@ void Program::replace(Node *n0, Node *n1) {
     for (auto e: *this->getEqs()) {
         e->setParents();
         for (auto bc: *e->getBCs()) {
-            e->setParents();
+            bc->setParents();
         }
     }
 }
@@ -135,7 +135,8 @@ Node::~Node() {
     nNode--;
 }
 
-Program::Program(SymTab *symTab, DeclLst *decls, EqLst *eqs) {
+Program::Program(std::string filename, SymTab *symTab, DeclLst *decls, EqLst *eqs) :
+filename(filename) {
     this->symTab = symTab;
     this->decls = decls;
     this->eqs = eqs;
@@ -209,15 +210,35 @@ DeclLst *Program::getDecls() {
     return decls;
 }
 
-Expr::Expr(Node *p) : Node(p) {}
+Expr::Expr(Node *p) : Node(p), priority(5) {}
+Expr::Expr(int priority, Node *p) : Node(p), priority(priority) {}
 Expr::~Expr() {};
 
-BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) : Expr(p) {
-    assert(lOp && rOp);
-    children.push_back(lOp);
-    children.push_back(rOp);
-    this->op = op;
+int getPriority(char c) {
+    switch(c) {
+        case '^':
+            return 3;
+            break;
+        case '*':
+        case '/':
+            return 2;
+            break;
+        case '+':
+        case '-':
+            return 1;
+            break;
+    }
+    err << "unsupported binary operator: \"" << c << "\"";
+    exit(EXIT_FAILURE);
 }
+
+BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) :
+    Expr(getPriority(op), p) {
+        assert(lOp && rOp);
+        children.push_back(lOp);
+        children.push_back(rOp);
+        this->op = op;
+    }
 
 Node *BinExpr::copy() {
     Expr *l = dynamic_cast<Expr *>(getLeftOp()->copy());

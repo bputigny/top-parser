@@ -6,6 +6,7 @@
 #include "TopBackEnd.h"
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <list>
@@ -27,38 +28,47 @@ void usage(char *bin) {
 
 void help(char *bin) {
     usage(bin);
-    fprintf(stderr, "OPTIONS:\n");
-    fprintf(stderr, "  -o output_file %*s output file name", 8, "");
-    fprintf(stderr, " (default: standard output)\n");
-    fprintf(stderr, "  -f %*s force: override output file (if exists)\n",
-            20, "");
-    fprintf(stderr, "  -h %*s help: display this help\n", 20, "");
-    fprintf(stderr, "  -v level %*s set verbosity level ", 14, "");
-    fprintf(stderr, "\n");
+    std::cerr << "OPTIONS:\n";
+    std::cerr << std::left << std::setw(16) << "  -o filename" <<
+        "\toutput file name\n";
+    // std::cerr << std::setw(20) <<
+    //     std::setw(30) << " (default: standard output)\n";
+    std::cerr << std::setw(16) << "  -f" <<
+        "\tforce: override output file (if exists)\n";
+    std::cerr << std::setw(16) << "  -h" <<
+        "\thelp: display this help\n";
+    std::cerr << std::setw(16) << "  -v level" <<
+        "\tset verbosity level\n";
+    std::cerr << std::setw(16) << "  -l filename" <<
+        "\twrites equation into LaTeX format\n";
 }
 
 int main(int argc, char* argv[]) {
-    std::string *outFileName = NULL;
+    std::string *outFileName = NULL, *latexFileName = NULL;
     char c;
     int nfile = 0;
-    int force = 0;
+    bool force = false, latex = false;
 
     Printer::init();
 
-    while ((c = getopt(argc, argv, "o:fhv:")) != EOF) {
+    while ((c = getopt(argc, argv, "o:fhv:l:")) != EOF) {
         switch (c) {
         case 'h':
             help(argv[0]);
             exit(EXIT_SUCCESS);
             break;
         case 'f':
-            force = 1;
+            force = true;
             break;
         case 'o':
             outFileName = new std::string(optarg);
             break;
         case 'v':
             Printer::init(atoi(optarg));
+            break;
+        case 'l':
+            latex = true;
+            latexFileName = new std::string(optarg);
             break;
         }
     }
@@ -87,15 +97,25 @@ int main(int argc, char* argv[]) {
     FrontEnd fe;
     ir::Program *p = fe.parse(*filename);
     TopBackEnd topBackEnd(p);
-    Output *o;
+    FortranOutput *o;
     std::ofstream ofs;
     if (outFileName) {
         ofs.open(*outFileName);
-        o = new Output(ofs);
+        o = new FortranOutput(ofs);
     }
     else {
-        o = new Output(std::cout);
+        o = new FortranOutput(std::cout);
     }
+
+    if (latex) {
+        LatexOutput *lo;
+        std::ofstream lofs;
+        lofs.open(*latexFileName);
+        lo = new LatexOutput(lofs);
+        topBackEnd.emitLaTeX(*lo);
+        lofs.close();
+    }
+
     topBackEnd.emitCode(*o);
 
     delete o;
