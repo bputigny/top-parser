@@ -147,7 +147,8 @@ void Program::buildSymTab() {
     for (auto d:*decls) {
         if (ir::Identifier *id = dynamic_cast<ir::Identifier *>(d->getLHS())) {
             assert(d->getDef());
-            ir::Variable *var = new ir::Variable(id->getName(), d->getDef());
+            ir::Variable *var = new ir::Variable(id->getName(), id->vectComponent,
+                    d->getDef());
             symTab->add(var);
         }
         else {
@@ -350,9 +351,8 @@ Node *DiffExpr::copy() {
     return ret;
 }
 
-Identifier::Identifier(std::string *n, Node *p) : Expr(p), name(*n) { }
-
-Identifier::Identifier(std::string n, Node *p) :  Identifier(&n, p) { }
+Identifier::Identifier(std::string n, int vectComponent, Node *p) :
+    Expr(p), name(n), vectComponent(vectComponent) { }
 
 std::string Identifier::getName() {
     return name;
@@ -376,14 +376,9 @@ bool Identifier::operator==(Node& n) {
     }
 }
 
-Decl::Decl(Expr *lhs, Expr *rhs, bool noLM0) {
+Decl::Decl(Expr *lhs, Expr *rhs) {
     children.push_back(lhs);
     children.push_back(rhs);
-    this->noLM0 = noLM0;
-}
-
-bool Decl::getLM0() {
-    return noLM0;
 }
 
 void Decl::dump(std::ostream& os) const {
@@ -507,13 +502,13 @@ bool BC::operator==(Node& n) {
     return false;
 }
 
-FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, p) {
+FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, 0, p) {
     for (auto c: *args) {
         children.push_back(c);
     }
 }
 
-FuncCall::FuncCall(std::string name, Expr *arg, Node *p) : Identifier(name, p) {
+FuncCall::FuncCall(std::string name, Expr *arg, Node *p) : Identifier(name, 0, p) {
     children.push_back(arg);
 }
 
@@ -558,7 +553,7 @@ bool FuncCall::operator==(Node& n) {
     }
 }
 
-ArrayExpr::ArrayExpr(std::string name, ExprLst *indices, Node *p) : Identifier(name, p) {
+ArrayExpr::ArrayExpr(std::string name, ExprLst *indices, Node *p) : Identifier(name, 0, p) {
     for(auto c: *indices)
         children.push_back(c);
 }

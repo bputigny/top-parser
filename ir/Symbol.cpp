@@ -27,12 +27,11 @@ std::string Param::getType() {
     return type;
 }
 
-Variable::Variable(std::string n, Expr *def, bool internal) : Symbol(n, def, internal) { }
+Variable::Variable(std::string n, int vc, Expr *def, bool internal) :
+    Symbol(n, def, internal), vectComponent(vc) { }
 
 Array::Array(std::string n, int ndim, Expr *def, bool internal) :
-    Variable(n, def, internal) {
-        this->ndim = ndim;
-    }
+    Variable(n, 0, def, internal), ndim(ndim) { }
 
 Function::Function(std::string name, int nparams) :
     Symbol(name, NULL, true) { 

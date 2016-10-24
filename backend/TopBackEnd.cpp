@@ -1398,13 +1398,20 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     for (auto d: *prog->getDecls()) {
         emitDecl(fo, d, lvar_set, leq_set);
     }
-
-    for (auto lv: lvar_set) {
-        if (lv.second == false) {
-            err << "lvar for variable `" << lv.first << "\' is not set\n";
-            exit(EXIT_FAILURE);
-        }
+    for (auto v: vars) {
+        fo << "      dm(1)%lvar(1, " << ivar(v->getName()) << ") = ";
+        if (v->vectComponent == 3)
+            fo << "abs(m) + 1 - iparity\n";
+        else
+            fo << "abs(m) + iparity\n";
     }
+
+    // for (auto lv: lvar_set) {
+    //     if (lv.second == false) {
+    //         err << "lvar for variable `" << lv.first << "\' is not set\n";
+    //         exit(EXIT_FAILURE);
+    //     }
+    // }
     for (auto le: leq_set) {
         if (le.second == false) {
             err << "leq for equation `" << le.first << "\' is not set\n";
@@ -1414,14 +1421,14 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
     for (int i=1; i<=nvar; i++) {
         fo << "      do j=2, nt\n";
-        fo << "            dm(1)\%lvar(j, " << i<< ") = 2 + dm(1)\%lvar(j-1, " <<
+        fo << "            dm(1)\%lvar(j, " << i << ") = 2 + dm(1)\%lvar(j-1, " <<
             i << ")\n";
         fo << "      enddo\n";
     }
     fo << "\n";
     for (int i=1; i<=neq; i++) {
         fo << "      do j=2, nt\n";
-        fo << "            dm(1)\%leq(j, " << i<< ") = 2 + dm(1)\%leq(j-1, " <<
+        fo << "            dm(1)\%leq(j, " << i << ") = 2 + dm(1)\%leq(j-1, " <<
             i << ")\n";
         fo << "      enddo\n";
     }
@@ -1517,17 +1524,11 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
         eqHasModifyL0[i] = false;
 
     std::map<std::string, bool> varLm0Null;
-    for (auto v: this->vars)
-        varLm0Null[v->getName()] = false;
-
-    for (auto d: *this->prog->getDecls()) {
-        if (d->getLM0()) { // this should only be true for lvar(v) = expr no_lm0
-            if (auto lvar = dynamic_cast<ir::FuncCall *>(d->getLHS())) {
-                if (auto id = dynamic_cast<ir::Identifier *>(lvar->getArgs()->at(0))) {
-                    varLm0Null[id->getName()] = true;
-                }
-            }
-        }
+    for (auto v: this->vars) {
+        if (v->vectComponent > 1)
+            varLm0Null[v->getName()] = true;
+        else
+            varLm0Null[v->getName()] = false;
     }
 
     for (auto e: eqs) {
@@ -1575,7 +1576,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
    fo << "      call integrales_clear()\n";
 
-   fo << "      call dump_coef()\n";
+   fo << "      ! call dump_coef()\n";
 
 
    fo << "\n      end subroutine init_a\n";

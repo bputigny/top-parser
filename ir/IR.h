@@ -134,12 +134,12 @@ class Identifier : public Expr {
         std::string name;
 
     public:
-        Identifier(std::string *n, Node *parent = NULL);
-        Identifier(std::string n, Node *parent = NULL);
+        Identifier(std::string n, int vectComponent = 0, Node *parent = NULL);
         std::string getName();
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
         bool operator==(Node&);
+        const int vectComponent;
 };
 
 class FuncCall : public Identifier {
@@ -163,16 +163,14 @@ class ArrayExpr : public Identifier {
 class Decl : public Node {
     /// this flag tells whether the declaration have a degree l = 0
     /// this obviously only makes sense for lvar(variable) declaration
-    bool noLM0;
 
     public:
-        Decl(Expr *, Expr *, bool = false);
+        Decl(Expr *, Expr *);
         Expr *getLHS();
         Expr *getDef();
         virtual void dump(std::ostream& os) const;
         virtual Node *copy();
         bool operator==(Node&);
-        bool getLM0();
 };
 
 class DeclLst : public std::list<Decl *> {
@@ -269,7 +267,8 @@ class Param : public Symbol {
 
 class Variable : public Symbol {
     public:
-        Variable(std::string n, Expr *def = NULL, bool internal = false);
+        Variable(std::string n, int vc = 0, Expr *def = NULL, bool internal = false);
+        const int vectComponent;
 };
 
 class Array : public Variable {

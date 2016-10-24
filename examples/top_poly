@@ -1,17 +1,17 @@
-param int m
-param int lres
-param int iparity
-param double rota
-param int lmod
-param int lmax
-param int iCor
-param int orderFD
-param double pindex
+input int m
+input int lres
+input int iparity
+input double rota
+input int lmod
+input int lmax
+input int iCor
+input int orderFD
+input double pindex
 
-param double Gamma1, gamma_p, pder, uder
+input double Gamma1, gamma_p, pder, uder
 
 # var B, (u, v, w), Pi, ...
-var B, u, v, Pi, Phi, Phie, w
+var B, (u, v, w), Pi, Phi, Phie
 
 field zeta, sint, hh, r_map, r_z, hht, r_t, hhz,
         cost, lnhht, r_zt, r_zz, r_tt,
@@ -19,13 +19,13 @@ field zeta, sint, hh, r_map, r_z, hht, r_t, hhz,
         re_tt, hhzz
 scalar omga, aplat, lambda
 
-lvar(B)     = abs(m) + iparity
-lvar(u)     = abs(m) + iparity
-lvar(v)     = abs(m) + iparity no_lm0
-lvar(Pi)    = abs(m) + iparity
-lvar(Phi)   = abs(m) + iparity
-lvar(Phie)  = abs(m) + iparity
-lvar(w)     = abs(m) + 1 - iparity no_lm0
+# lvar(B)     = abs(m) + iparity
+# lvar(u)     = abs(m) + iparity
+# lvar(v)     = abs(m) + iparity
+# lvar(Pi)    = abs(m) + iparity
+# lvar(Phi)   = abs(m) + iparity
+# lvar(Phie)  = abs(m) + iparity
+# lvar(w)     = abs(m) + 1 - iparity
 
 leq(eqB)    = abs(m) + iparity
 leq(equ)    = abs(m) + iparity

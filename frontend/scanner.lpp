@@ -26,6 +26,7 @@ SPACE		[ \t]
 "let"           { if (!comment) { return KW_LET;} }
 "equation"      { if (!comment) { return KW_EQ;} }
 "param"         { if (!comment) { return KW_PARAM;} }
+"input"         { if (!comment) { return KW_PARAM;} }
 "var"           { if (!comment) { return KW_VAR;} }
 "field"         { if (!comment) { return KW_FIELD;} }
 "scalar"        { if (!comment) { return KW_SCAL;} }
