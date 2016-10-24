@@ -13,8 +13,10 @@ void SymTab::add(ir::Symbol *s) {
     assert(s);
     if (this->search(s->name) == NULL)
         std::list<ir::Symbol *>::push_back(s);
-    else
+    else {
         err << s->name << " already defined\n";
+        exit(EXIT_FAILURE);
+    }
 }
 
 ir::Symbol *SymTab::search(ir::Identifier *id) const {

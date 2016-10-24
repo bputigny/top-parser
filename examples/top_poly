@@ -1,6 +1,4 @@
-input int m
 input int lres
-input int iparity
 input double rota
 input int lmod
 input int lmax
@@ -32,8 +30,6 @@ gamma_p = 1.0 + 1.0/pindex
 
 pder = modulo(abs(m)+iparity+1, 2)
 uder = modulo(abs(m)+iparity, 2)
-
-lmax = maxval(lvar)
 
 in
 
