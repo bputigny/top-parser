@@ -22,7 +22,9 @@ SPACE		[ \t]
 \n              { comment = 0; }
 "#"             { comment = 1; }
 "fp"            { if (!comment) { return KW_LAMBDA;} }
-"no_lm0"        { if (!comment) { return KW_NO_LM0;} }
+"div"           { if (!comment) { return KW_DIV;} }
+"grad"          { if (!comment) { return KW_GRAD;} }
+"cross"         { if (!comment) { return KW_CROSS;} }
 "let"           { if (!comment) { return KW_LET;} }
 "equation"      { if (!comment) { return KW_EQ;} }
 "param"         { if (!comment) { return KW_PARAM;} }

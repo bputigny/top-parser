@@ -7,6 +7,11 @@ Symbol::Symbol(std::string n, Expr *def, bool internal) : name(n) {
     this->internal = internal;
 }
 
+Symbol::~Symbol() {
+    if (expr)
+        delete expr;
+}
+
 Expr *Symbol::getDef() {
     return expr;
 }

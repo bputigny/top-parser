@@ -17,7 +17,8 @@ namespace ir{
 //
 class SymTab : public std::list<ir::Symbol *>, public DOT {
     public:
-        SymTab() { }
+        SymTab();
+        ~SymTab();
         void push_back(ir::Symbol *s);
         void add(ir::Symbol *s);
         ir::Symbol *search(const std::string& id) const;

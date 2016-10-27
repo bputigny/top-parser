@@ -92,6 +92,10 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
         fo << ")";
     }
     else if (auto ue = dynamic_cast<ir::UnaryExpr *>(expr)) {
+        if (ue->getOp() == '\'') {
+            err << "should not happen\n";
+            exit(EXIT_FAILURE);
+        }
         fo << ue->getOp() << "(";
         emitExpr(ue->getExpr(), fo, ivar, ieq, emitLlExpr, bcLocation);
         fo << ")";
@@ -100,7 +104,7 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
         int narg = 0;
         fo << fc->name;
         fo << "(";
-        for (auto a: *fc->getArgs()) {
+        for (auto a: fc->getArgs()) {
             if (narg++ > 0)
                 fo << ", ";
             emitExpr(a, fo, ivar, ieq, emitLlExpr, bcLocation);
@@ -233,7 +237,7 @@ bool isZero(ir::Expr *e) {
 std::list<ir::Equation *> TopBackEnd::formatEquations() {
     std::list<ir::Equation *> list;
 
-    for (auto e: *prog->getEqs()) {
+    for (auto e: prog->getEqs()) {
         this->simplify(e->getLHS());
         this->simplify(e->getRHS());
         ir::Expr *lhs = e->getLHS();
@@ -246,13 +250,14 @@ std::list<ir::Equation *> TopBackEnd::formatEquations() {
             eq = lhs;
         }
         else {
-            eq = new ir::BinExpr(rhs, '-', lhs);
+            eq = (*rhs - *lhs).copy();
         }
         if (e->name == "undef") {
             err << "equation without a name\n";
             exit(EXIT_FAILURE);
         }
-        ir::Equation *newEq = new ir::Equation(e->name, eq, NULL, e->getBCs());
+        ir::Equation *newEq = new ir::Equation(e->name, eq,
+                new ir::Value<float>(0), e->getBCs());
         list.push_back(newEq);
     }
     return list;
@@ -306,7 +311,8 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
     t->setParents();
     ir::Identifier *var = this->findVar(t);
     if (!var) {
-        err << "term without varaible?";
+        err << "term without varaible?\n";
+        t->display();
         exit(EXIT_FAILURE);
     }
     int power = this->findPower(t);
@@ -359,7 +365,7 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
             Term *ret = buildTerm(ue->getExpr());
             if (ue->getOp() != '-')
                 unsupported(ue);
-            ret->expr = new ir::UnaryExpr(ret->expr, '-');
+            ret->expr = new ir::UnaryExpr(scalar(ret->expr), '-');
             return ret;
         }
         else if (auto de = dynamic_cast<ir::DiffExpr *>(t)) {
@@ -476,6 +482,10 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
     this->nattbc = 0;
 
     for (auto e: eqs) {
+        if (!isZero(e->getRHS())) {
+            err << "equation was not correctly formatted (RHS is not 0)\n";
+            exit(EXIT_FAILURE);
+        }
         ieq++;
         std::vector<ir::Expr *> *terms = this->splitIntoTerms(e->getLHS());
         this->eqs[e->name] = std::list<Term *>();
@@ -502,13 +512,14 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
                 this->simplify(rhs);
 
                 if (isZero(rhs)) {
-                    eq = (ir::Expr *) lhs->copy();
+                    // eq = (ir::Expr *) lhs->copy();
+                    eq = dynamic_cast<ir::Expr *>(lhs);
                 }
                 else if (isZero(lhs)) {
-                    eq = new ir::UnaryExpr((ir::Expr *) rhs->copy(), '-');
+                    eq = new ir::UnaryExpr(scalar(rhs->copy()), '-');
                 }
                 else {
-                    eq = new ir::BinExpr(lhs, '-', rhs);
+                    eq = new ir::BinExpr(scalar(lhs), '-', scalar(rhs));
                 }
 
                 eq->setParents();
@@ -548,8 +559,8 @@ TopBackEnd::TopBackEnd(ir::Program *p) {
     buildTermList(eqs);
 
     // add internal definitions
-    this->prog->getSymTab()->add(new ir::Param("m", "int"));
-    this->prog->getSymTab()->add(new ir::Param("iparity", "int"));
+    this->prog->getSymTab().add(new ir::Param("m", "int"));
+    this->prog->getSymTab().add(new ir::Param("iparity", "int"));
 }
 
 TopBackEnd::~TopBackEnd() { }
@@ -634,7 +645,7 @@ void TopBackEnd::simplify(ir::Expr *expr) {
 }
 
 bool TopBackEnd::isVar(std::string id) {
-    ir::Symbol *s = this->prog->getSymTab()->search(id);
+    ir::Symbol *s = this->prog->getSymTab().search(id);
     if (s) {
         if (dynamic_cast<ir::Variable *>(s))
             return true;
@@ -643,7 +654,7 @@ bool TopBackEnd::isVar(std::string id) {
 }
 
 bool TopBackEnd::isParam(std::string id) {
-    ir::Symbol *s = this->prog->getSymTab()->search(id);
+    ir::Symbol *s = this->prog->getSymTab().search(id);
     if (s) {
         if (dynamic_cast<ir::Param *>(s))
             return true;
@@ -652,7 +663,7 @@ bool TopBackEnd::isParam(std::string id) {
 }
 
 bool TopBackEnd::isField(std::string id) {
-    ir::Symbol *s = this->prog->getSymTab()->search(id);
+    ir::Symbol *s = this->prog->getSymTab().search(id);
     if (s) {
         if (dynamic_cast<ir::Field *>(s))
             return true;
@@ -661,7 +672,7 @@ bool TopBackEnd::isField(std::string id) {
 }
 
 bool TopBackEnd::isScal(std::string id) {
-    ir::Symbol *s = this->prog->getSymTab()->search(id);
+    ir::Symbol *s = this->prog->getSymTab().search(id);
     if (s) {
         if (dynamic_cast<ir::Scalar *>(s))
             return true;
@@ -687,7 +698,7 @@ ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
 
     if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
         if (auto ll = extractLlExpr(ue->getExpr())) {
-            ir::UnaryExpr *newExpr = new ir::UnaryExpr(ll,
+            ir::UnaryExpr *newExpr = new ir::UnaryExpr(scalar(ll),
                     ue->getOp());
             newExpr->setParent(e->getParent());
             return newExpr;
@@ -719,8 +730,8 @@ ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
         return extractLlExpr(ue->getExpr());
     }
     else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
-        for (auto arg: *fc->getArgs()) {
-            if (extractLlExpr(arg)) {
+        for (auto arg: fc->getArgs()) {
+            if (extractLlExpr(dynamic_cast<ir::Expr *>(arg))) {
                 return fc;
             }
         }
@@ -753,7 +764,7 @@ std::vector<ir::Expr *> *TopBackEnd::splitIntoTerms(ir::Expr *e) {
                 rRight = splitIntoTerms(be->getRightOp());
                 for (auto expr: *rRight) {
                     if (be->getOp() == '-') {
-                        rLeft->push_back(new ir::UnaryExpr(expr, '-'));
+                        rLeft->push_back(new ir::UnaryExpr(scalar(expr), '-'));
                     }
                     else {
                         rLeft->push_back(expr);
@@ -1119,7 +1130,7 @@ int TopBackEnd::ivar(std::string name) {
 
 int TopBackEnd::ieq(std::string name) {
     int i = 1;
-    for (auto e: *this->prog->getEqs()) {
+    for (auto e: this->prog->getEqs()) {
         if (e->name == name)
             return i;
         i++;
@@ -1129,7 +1140,7 @@ int TopBackEnd::ieq(std::string name) {
 }
 
 void TopBackEnd::buildVarList() {
-    for (auto sym: *prog->getSymTab()) {
+    for (auto sym: prog->getSymTab()) {
         if (auto var = dynamic_cast<ir::Variable *>(sym)) {
             this->vars.push_back(var);
             nvar++;
@@ -1140,7 +1151,7 @@ void TopBackEnd::buildVarList() {
 void TopBackEnd::emitUseModel(FortranOutput& fo) {
     fo << "      use model, only: ";
     int n = 0;
-    for (auto id: *this->prog->getSymTab()) {
+    for (auto id: this->prog->getSymTab()) {
         if (isField(id->name) || isScal(id->name)) {
             if (n > 0) {
                 fo << ", ";
@@ -1154,7 +1165,7 @@ void TopBackEnd::emitUseModel(FortranOutput& fo) {
 
 void TopBackEnd::emitCode(FortranOutput& fo) {
 
-    for (auto e: *prog->getEqs()) {
+    for (auto e: prog->getEqs()) {
         fo << "!------------------------------------------------------------\n";
         fo << "! Indices for equation " << e->name << "\n";
         fo << "!------------------------------------------------------------\n";
@@ -1171,7 +1182,7 @@ void TopBackEnd::emitCode(FortranOutput& fo) {
         fo << "      end subroutine eqi_" << e->name << "\n";
     }
 
-    for (auto e: *prog->getEqs()) {
+    for (auto e: prog->getEqs()) {
         fo << "!------------------------------------------------------------\n";
         fo << "! Coupling coefficients for equation " << e->name << "\n";
         fo << "!------------------------------------------------------------\n";
@@ -1208,10 +1219,10 @@ void TopBackEnd::emitDeclRHS(FortranOutput& fo, ir::Expr *expr) {
     else if (auto fc = dynamic_cast<ir::FuncCall *>(expr)) {
         int iarg = 0;
         fo << fc->name << "(";
-        for (auto arg: *fc->getArgs()) {
+        for (auto arg: fc->getArgs()) {
             if (iarg++ > 0)
                 fo << ", ";
-            emitDeclRHS(fo, arg);
+            emitDeclRHS(fo, dynamic_cast<ir::Expr *>(arg));
         }
         fo << ")";
     }
@@ -1240,7 +1251,7 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
         std::map<std::string, bool>& lvar_set,
         std::map<std::string, bool>& leq_set) {
     assert(decl);
-    ir::Expr *lhs = decl->getLHS();
+    ir::Expr *lhs = dynamic_cast<ir::Expr *>(decl->getLHS());
     if (auto fc = dynamic_cast<ir::FuncCall *>(lhs)) {
 #if 0
         if (fc->name == "lvar") {
@@ -1256,12 +1267,12 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
         else
 #endif
         if (fc->name == "leq") {
-            ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()->at(0));
+            ir::Identifier *id = dynamic_cast<ir::Identifier *>(fc->getArgs()[0]);
             assert(id);
             int ieq = this->ieq(id->name);
             fo << "      dm(1)\%leq(1, " << ieq <<
                 ") = ";
-            emitDeclRHS(fo, decl->getDef());
+            emitDeclRHS(fo, dynamic_cast<ir::Expr *>(decl->getDef()));
             fo << " ! eq: " << id->name << "\n";
             leq_set[id->name] = true;
         }
@@ -1272,7 +1283,7 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
     }
     else if (auto id = dynamic_cast<ir::Identifier *>(lhs)) {
         fo << "      " << id->name << " = ";
-        emitDeclRHS(fo, decl->getDef());
+        emitDeclRHS(fo, dynamic_cast<ir::Expr *>(decl->getDef()));
         fo << "\n";
     }
     else {
@@ -1283,7 +1294,7 @@ void TopBackEnd::emitDecl(FortranOutput& fo, ir::Decl *decl,
 
 void TopBackEnd::emitInitA(FortranOutput& fo) {
     int nvar = 0;
-    int neq = this->prog->getEqs()->size();
+    int neq = this->prog->getEqs().size();
 
     std::map<std::string, bool> lvar_set;
     std::map<std::string, bool> leq_set;
@@ -1300,7 +1311,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs << "    double precision, save :: shift\n";
     inputs << "    integer, save :: nsol\n";
 
-    for (auto s: *this->prog->getSymTab()) {
+    for (auto s: this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
             nvar++;
             lvar_set[s->name] = false;
@@ -1337,7 +1348,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs << "        nsol = fetch('nsol', 4)\n\n";
     inputs << "        mattype = fetch('mattype', 'FULL')\n";
     inputs << "        dertype = fetch('dertype', 'CHEB')\n\n";
-    for (auto s: *this->prog->getSymTab()) {
+    for (auto s: this->prog->getSymTab()) {
         if (auto p = dynamic_cast<ir::Param *>(s)) {
             std::string default_value;
             if (p->getType() == "double") {
@@ -1378,7 +1389,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs << "end module inputs\n";
     inputs.close();
 
-    for (auto e: *prog->getEqs()) {
+    for (auto e: prog->getEqs()) {
         leq_set[e->name] = false;;
     }
 
@@ -1405,7 +1416,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     fo << "      allocate(dm(1)\%lvar(nt, " << nvar << "))\n";
     fo << "      allocate(dm(1)\%leq(nt, " << neq << "))\n\n";
 
-    for (auto d: *prog->getDecls()) {
+    for (auto d: prog->getDecls()) {
         emitDecl(fo, d, lvar_set, leq_set);
     }
     for (auto v: vars) {
@@ -1483,7 +1494,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     fo << "      dm(1)\%var_keep = .true.\n\n";
 
     int ivar = 1;
-    for (auto s: *this->prog->getSymTab()) {
+    for (auto s: this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
             fo << "      dm(1)\%var_name(" << ivar++ << ") = \'" <<
                 s->name << "\'\n";
@@ -1491,11 +1502,11 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     }
 
     int ieq = 1;
-    for (auto e: *this->prog->getEqs()) {
+    for (auto e: this->prog->getEqs()) {
         fo << "      dm(1)\%eq_name(" << ieq++ << ") = \'" << e->name << "\'\n";
     }
 
-    for (auto e: *this->prog->getEqs()) {
+    for (auto e: this->prog->getEqs()) {
         fo << "      call eqi_" << e->name << "()\n";
     }
 
@@ -1525,7 +1536,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     fo << "            ! r_map(1, j) = 1d0\n";
     fo << "      enddo\n";
 
-    for (auto e: *this->prog->getEqs()) {
+    for (auto e: this->prog->getEqs()) {
         fo << "      call eq_" << e->name << "()\n";
     }
 
@@ -1702,10 +1713,10 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
         else if (auto fc = isCoupling(e)) {
             lo << "\\iint_{4 \\pi}";
             int narg = 0;
-            for (auto a: *fc->getArgs()) {
+            for (auto a: fc->getArgs()) {
                 if (narg++ > 0)
                     lo << ", ";
-                emitExpr(a);
+                emitExpr(dynamic_cast<ir::Expr *>(a));
             }
             lo << getIntegralLaTeX(fc->name);
             lo << "\\ d\\Omega";
@@ -1713,10 +1724,10 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
         else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
             lo << escapeLaTeX(fc->name) << "\\Big(";
             int narg = 0;
-            for (auto a: *fc->getArgs()) {
+            for (auto a: fc->getArgs()) {
                 if (narg++ > 0)
                     lo << ", ";
-                emitExpr(a);
+                emitExpr(dynamic_cast<ir::Expr *>(a));
             }
             lo << "\\Big)";
         }
@@ -1769,7 +1780,7 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
     lo << "\\begin{document}\n";
     lo << "Filename: \\texttt{" << escapeLaTeX(this->prog->filename) << "}";
 
-    for (auto e: *prog->getEqs()) {
+    for (auto e: prog->getEqs()) {
         lo << "\\subsection*{" << escapeLaTeX(e->name) << "}\n";
         lo << "\\begin{align*}\n";
         int n = 0;
@@ -1801,3 +1812,4 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
 }
 
 #undef unsupported
+#undef err

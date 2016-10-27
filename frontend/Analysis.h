@@ -12,19 +12,19 @@ class Analysis {
         inline Analysis() { }
 
         inline void run(std::function<void (T *)> check, ir::Node *root) {
-            for (auto c:root->getChildren()) {
-                run(check, c);
-            }
             if (T *n = dynamic_cast<T *>(root)) {
                 check(n);
+            }
+            for (auto c:root->getChildren()) {
+                run(check, c);
             }
         }
         inline ir::Node *run(std::function<ir::Node *(T *)> check, ir::Node *root) {
-            for (auto c:root->getChildren()) {
-                run(check, c);
-            }
             if (T *n = dynamic_cast<T *>(root)) {
                 check(n);
+            }
+            for (auto c:root->getChildren()) {
+                run(check, c);
             }
             return NULL;
         }

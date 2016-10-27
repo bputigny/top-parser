@@ -5,6 +5,14 @@
 
 #include <cassert>
 
+SymTab::SymTab() { }
+
+SymTab::~SymTab() {
+    for (auto s: *this) {
+        delete s;
+    }
+}
+
 void SymTab::push_back(ir::Symbol *s) {
     add(s);
 }

@@ -42,13 +42,13 @@ void Program::replace(Node *n0, Node *n1) {
         std::replace(n->getChildren().begin(), n->getChildren().end(), n0, n1);
     };
 
-    for (auto e: *this->getEqs()) {
+    for (auto e: this->getEqs()) {
         replaceNode(e);
         for (auto bc: *e->getBCs()) {
             replaceNode(bc);
         }
     }
-    for (auto e: *this->getEqs()) {
+    for (auto e: this->getEqs()) {
         e->setParents();
         for (auto bc: *e->getBCs()) {
             bc->setParents();
@@ -65,9 +65,10 @@ int Node::getNodeNumber() {
 Node::Node(Node *p) : children(), srcLoc("unknown") {
     nNode++;
     parent = p;
+    clearOnDelete = false;
 }
 
-Node *Node::getParent() {
+Node *Node::getParent() const {
     return parent;
 }
 
@@ -94,12 +95,12 @@ void Node::dumpDOT(std::ostream& os, std::string title, bool root) const {
         }
         os << "node [shape = Mrecord]\n";
     }
-    os << (long)this << " [label=\"";
+    os << (long) this << " [label=\"";
     this->dump(os);
     os << "\"]\n";
 
     for (auto c:children) {
-        os << (long)this << " -> " << (long)c << "\n";
+        os << (long) this << " -> " << (long) c << "\n";
     }
 
     for (auto c:children) {
@@ -114,19 +115,19 @@ std::vector<Node *>& Node::getChildren() {
     return children;
 }
 
-bool Node::isLeaf() {
-    return children.empty();
-}
-
 void Node::clear() {
     for(auto c: children) {
         c->clear();
+        // if (this->clearOnDelete)
         delete c;
     }
     children.clear();
 }
 
 Node::~Node() {
+    if (clearOnDelete) {
+        this->clear();
+    }
     nNode--;
 }
 
@@ -137,11 +138,24 @@ filename(filename) {
     this->eqs = eqs;
 }
 
+Program::~Program() {
+    for (auto d: *decls) {
+        d->clear();
+        delete d;
+    }
+    for (auto e: *eqs) {
+        e->clear();
+        delete e;
+    }
+    delete symTab;
+    delete decls;
+    delete eqs;
+}
+
 void Program::buildSymTab() {
     // First add definitions
-    for (auto d:*decls) {
+    for (auto d: *decls) {
         if (ir::Identifier *id = dynamic_cast<ir::Identifier *>(d->getLHS())) {
-            assert(d->getDef());
             ir::Variable *var = new ir::Variable(id->name, id->vectComponent,
                     d->getDef());
             symTab->add(var);
@@ -172,12 +186,12 @@ void Program::dumpDOT(std::ostream& os, std::string title, bool root) const {
         os << "root -> BCs\n";
     }
     for(auto d: *decls) {
-        os << "DEFs -> " << (long)d << "\n";
+        os << "DEFs -> " << (long) d << "\n";
         d->dumpDOT(os, title, false);
     }
 
     for(auto e: *eqs) {
-        os << "EQs -> " << (long)e << "\n";
+        os << "EQs -> " << (long) e << "\n";
         e->dumpDOT(os, title, false);
     }
 
@@ -190,181 +204,16 @@ void Program::dumpDOT(std::ostream& os, std::string title, bool root) const {
     }
 }
 
-SymTab *Program::getSymTab() {
-    return symTab;
+SymTab& Program::getSymTab() {
+    return *symTab;
 }
 
-EqLst *Program::getEqs() {
-    return eqs;
+EqLst& Program::getEqs() {
+    return *eqs;
 }
 
-// BCLst *Program::getBCs() {
-//     return bcs;
-// }
-
-DeclLst *Program::getDecls() {
-    return decls;
-}
-
-Expr::Expr(Node *p) : Node(p), priority(5) {}
-Expr::Expr(int priority, Node *p) : Node(p), priority(priority) {}
-Expr::~Expr() {};
-
-int getPriority(char c) {
-    switch(c) {
-        case '^':
-            return 3;
-            break;
-        case '*':
-        case '/':
-            return 2;
-            break;
-        case '+':
-        case '-':
-            return 1;
-            break;
-    }
-    err << "unsupported binary operator: \"" << c << "\"";
-    exit(EXIT_FAILURE);
-}
-
-BinExpr::BinExpr(Expr *lOp, char op, Expr *rOp, Node *p) :
-    Expr(getPriority(op), p) {
-        assert(lOp && rOp);
-        children.push_back(lOp);
-        children.push_back(rOp);
-        this->op = op;
-    }
-
-Node *BinExpr::copy() {
-    Expr *l = dynamic_cast<Expr *>(getLeftOp()->copy());
-    Expr *r = dynamic_cast<Expr *>(getRightOp()->copy());
-    return new BinExpr(l, op, r);
-}
-
-void BinExpr::dump(std::ostream &os) const {
-    os << op;
-}
-
-Expr *BinExpr::getLeftOp() const {
-    return dynamic_cast<Expr *>(children[0]);
-}
-
-Expr *BinExpr::getRightOp() const {
-    return dynamic_cast<Expr *>(children[1]);
-}
-
-char BinExpr::getOp() {
-    return op;
-}
-
-bool BinExpr::operator==(Node& n) {
-    try {
-        BinExpr& be = dynamic_cast<BinExpr&>(n);
-        return this->getOp() == be.getOp() &&
-            this->getLeftOp() == be.getLeftOp() &&
-            this->getRightOp() == be.getRightOp();
-
-    }
-    catch (std::bad_cast) {
-        return false;
-    }
-}
-
-UnaryExpr::UnaryExpr(Expr *expr, char op, Node *p) : Expr(p) {
-    children.push_back(expr);
-    this->op = op;
-}
-
-Expr *UnaryExpr::getExpr() const {
-    return dynamic_cast<Expr *>(children[0]);
-}
-
-char UnaryExpr::getOp() const {
-    return op;
-}
-
-void UnaryExpr::dump(std::ostream& os) const {
-    os << op; // << *this->getExpr();
-}
-
-bool UnaryExpr::operator==(Node& n) {
-    try {
-        UnaryExpr& ue = dynamic_cast<UnaryExpr&>(n);
-        return getOp() == ue.getOp() &&
-            *this->getExpr() == *ue.getExpr();
-    }
-    catch (std::bad_cast) {
-        return false;
-    }
-}
-
-Node *UnaryExpr::copy() {
-    Expr *l = dynamic_cast<Expr *>(getExpr()->copy());
-    return new UnaryExpr(l, op);
-}
-
-DiffExpr::DiffExpr(Expr *expr, Identifier *id, std::string order, Node *p) : Expr(p) {
-    this->children.push_back(expr);
-    this->children.push_back(id);
-    this->order = order;
-}
-
-Expr *DiffExpr::getExpr() {
-    return dynamic_cast<Expr *>(this->children[0]);
-}
-
-bool DiffExpr::operator==(Node& n) {
-    try {
-        DiffExpr& de = dynamic_cast<DiffExpr&>(n);
-        return *this->getVar() == *de.getVar() &&
-            *this->getExpr() == *de.getExpr() &&
-            this->getOrder() == de.getOrder();
-    }
-    catch (std::bad_cast) {
-        return false;
-    }
-}
-
-Identifier *DiffExpr::getVar() {
-    return dynamic_cast<Identifier *>(this->children[1]);
-}
-
-void DiffExpr::setOrder(std::string order) {
-    this->order = order;
-}
-
-std::string DiffExpr::getOrder() {
-    return order;
-}
-
-Node *DiffExpr::copy() {
-    Expr *e = dynamic_cast<Expr *>(getExpr()->copy());
-    Identifier *i = dynamic_cast<Identifier *>(getVar()->copy());
-    DiffExpr *ret = new DiffExpr(e, i);
-    ret->setOrder(this->getOrder());
-    return ret;
-}
-
-Identifier::Identifier(std::string n, int vectComponent, Node *p) :
-    Expr(p), name(n), vectComponent(vectComponent) { }
-
-Node *Identifier::copy() {
-    return new Identifier(name);
-}
-
-void Identifier::dump(std::ostream& os) const {
-    os << "ID: " << name;
-}
-
-bool Identifier::operator==(Node& n) {
-    try {
-        Identifier& id = dynamic_cast<Identifier&>(n);
-        return this->name == id.name;
-    }
-    catch (std::bad_cast) {
-        return false;
-    }
+DeclLst& Program::getDecls() {
+    return *decls;
 }
 
 Decl::Decl(Expr *lhs, Expr *rhs) {
@@ -381,37 +230,49 @@ bool Decl::operator==(Node& n) {
     return false;
 }
 
-Expr *Decl::getLHS() {
+Expr *Decl::getLHS() const {
+    assert(dynamic_cast<Expr *>(children[0]));
     return dynamic_cast<Expr *>(children[0]);
 }
 
-Expr *Decl::getDef() {
+Expr *Decl::getDef() const {
+    assert(dynamic_cast<Expr *>(children[1]));
     return dynamic_cast<Expr *>(children[1]);
-}
-
-Node *Decl::copy() {
-    Expr *l = dynamic_cast<Expr *>(children[0]->copy());
-    Expr *r = dynamic_cast<Expr *>(children[1]->copy());
-    return new Decl(r, l);
 }
 
 Equation::Equation(std::string name,
         Expr *lhs, Expr *rhs, BCLst *bcs, Node *p) : Node(p), name(name) {
-    children.push_back(lhs);
-    children.push_back(rhs);
-    if (bcs) {
-        for (auto bc:*bcs) {
-            children.push_back(bc);
+    assert(lhs && rhs);
+    if ((isScalar(lhs) && isScalar(rhs)) ||
+            (isVect(lhs) && isVect(rhs))) {
+        children.push_back(lhs);
+        children.push_back(rhs);
+        if (bcs) {
+            for (auto bc:*bcs) {
+                children.push_back(bc);
+            }
         }
+    }
+    else {
+        err << "both sides of equation should be of same type (scalar or vectorial)\n";
+        lhs->display();
+        if (rhs)
+            rhs->display();
+        exit(EXIT_FAILURE);
     }
 }
 
-Equation::Equation(std::string name, Equation *eq) : Node(eq->getParent()), name(name) {
-    children.push_back(eq->getLHS());
-    children.push_back(eq->getRHS());
-    for (auto bc: *eq->getBCs())
-        children.push_back(bc);
+Equation::Equation(std::string name, const Expr& lhs, const Expr& rhs,
+        BCLst *bcs, Node *p) : Equation(name, lhs.copy(), rhs.copy(), bcs, p) {
 }
+
+Equation::Equation(std::string name, Equation &eq) :
+    Node(eq.getParent()), name(name) {
+        children.push_back(eq.getLHS());
+        children.push_back(eq.getRHS());
+        for (auto bc: *eq.getBCs())
+            children.push_back(bc);
+    }
 
 void Equation::setBCs(ir::BCLst *bcs) {
     for (auto b: *bcs) {
@@ -423,11 +284,11 @@ void Equation::dump(std::ostream& os) const {
     os << "=";
 }
 
-Expr *Equation::getLHS() {
+Expr *Equation::getLHS() const {
     return dynamic_cast<Expr *>(children[0]);
 }
 
-Expr *Equation::getRHS() {
+Expr *Equation::getRHS() const {
     return dynamic_cast<Expr *>(children[1]);
 }
 
@@ -436,7 +297,7 @@ bool Equation::operator==(Node& n) {
     return false;
 }
 
-BCLst *Equation::getBCs() {
+BCLst *Equation::getBCs() const {
     BCLst *bcs = new BCLst();
     int n = 0;
     for (auto c: children) {
@@ -448,14 +309,6 @@ BCLst *Equation::getBCs() {
     return bcs;
 }
 
-Node *Equation::copy() {
-    Expr *l = dynamic_cast<Expr *>(getLHS());
-    Expr *r = dynamic_cast<Expr *>(getRHS());
-    BCLst *bcs = getBCs();
-    ir::Equation *ret = new Equation(this->name, l, r, bcs);
-    return ret;
-}
-
 BC::BC(Equation *cond, Equation *loc, Node *p) : Node(p) {
     children.push_back(cond);
     children.push_back(loc);
@@ -465,17 +318,11 @@ void BC::dump(std::ostream& os) const {
     os << "BC";
 }
 
-Node *BC::copy() {
-    Equation *c = dynamic_cast<Equation *>(getCond()->copy());
-    Equation *l = dynamic_cast<Equation *>(getLoc()->copy());
-    return new BC(c, l);
-}
-
-Equation *BC::getLoc() {
+Equation *BC::getLoc() const {
     return dynamic_cast<Equation *>(children[1]);
 }
 
-Equation *BC::getCond() {
+Equation *BC::getCond() const {
     return dynamic_cast<Equation *>(children[0]);
 }
 
@@ -483,7 +330,7 @@ void BC::setEqLoc(int loc) {
     this->eqLoc = loc;
 }
 
-int BC::getEqLoc() {
+int BC::getEqLoc() const {
     return this->eqLoc;
 }
 
@@ -492,91 +339,7 @@ bool BC::operator==(Node& n) {
     return false;
 }
 
-FuncCall::FuncCall(std::string name, ExprLst *args, Node *p) : Identifier(name, 0, p) {
-    for (auto c: *args) {
-        children.push_back(c);
-    }
-}
-
-FuncCall::FuncCall(std::string name, Expr *arg, Node *p) : Identifier(name, 0, p) {
-    children.push_back(arg);
-}
-
-void FuncCall::dump(std::ostream& os) const {
-    os << "Func: " << name;
-}
-
-ExprLst *FuncCall::getArgs() {
-    ExprLst *ret = new ExprLst();
-    for (auto arg: children) {
-        ret->push_back(dynamic_cast<Expr *>(arg));
-    }
-    return ret;
-}
-
-Node *FuncCall::copy() {
-    ExprLst *args = new ExprLst();
-    for (auto a: *getArgs()) {
-        Expr *p = dynamic_cast<Expr *>(a->copy());
-        args->push_back(p);
-    }
-    return new FuncCall(name, args);
-}
-
-bool FuncCall::operator==(Node& n) {
-    try {
-        FuncCall& fc = dynamic_cast<FuncCall&>(n);
-        bool sameArgs;
-        if (this->name != fc.name)
-            return false;
-        if (this->getArgs()->size() == fc.getArgs()->size())
-            sameArgs = true;
-        else
-            return false;
-        for (int i=0; i<this->getArgs()->size(); i++) {
-            sameArgs = sameArgs && this->getArgs()->at(i) == fc.getArgs()->at(i);
-        }
-        return sameArgs;
-    }
-    catch (std::bad_cast) {
-        return false;
-    }
-}
-
-ArrayExpr::ArrayExpr(std::string name, ExprLst *indices, Node *p) : Identifier(name, 0, p) {
-    for(auto c: *indices)
-        children.push_back(c);
-}
-
-Node *ArrayExpr::copy() {
-    ExprLst *idx = new ExprLst();
-    for (auto i: children) {
-        Expr *p = dynamic_cast<Expr *>(i->copy());
-        idx->push_back(p);
-    }
-    return new ArrayExpr(name, idx);
-}
-
-bool ArrayExpr::operator==(Node& n) {
-    err << "not yet implemented\n";
-    return false;
-}
-
-IndexRange::IndexRange(Expr *lb, Expr *ub, Node *p) : BinExpr(lb, ':', ub, p) { }
-
-Expr *IndexRange::getLB() {
-    return dynamic_cast<Expr *>(children[0]);
-}
-
-Expr *IndexRange::getUB() {
-    return dynamic_cast<Expr *>(children[1]);
-}
-
-void DiffExpr::dump(std::ostream &os) const {
-    os << "Diff (order: " << this->order << ")";
-}
-
-}
+} // end namespace ir
 
 std::ostream& operator<<(std::ostream& os, ir::Node& node) {
     node.dump(os);

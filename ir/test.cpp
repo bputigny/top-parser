@@ -1,4 +1,5 @@
 #include "IR.h"
+#include "Coord.h"
 
 #include <fstream>
 
@@ -7,108 +8,66 @@ int main() {
     Printer::init(2);
     std::ofstream file;
 
-#if 0
-
-    ir::Expr *v0 = new ir::Identifier("v0");
-    ir::Expr *v1 = new ir::Value<float>(1);
-    ir::Expr *v2 = new ir::Value<float>(2);
-    ir::Expr *v3 = new ir::Value<float>(3);
-    ir::Expr *v4 = new ir::Value<float>(4);
-
-    ir::BinExpr *e = new ir::BinExpr(
-            v0,
-            '+',
-            new ir::BinExpr(
-                v1,
-                '+',
-                new ir::BinExpr(
-                    v2,
-                    '+',
-                    new ir::BinExpr(
-                        v3,
-                        '+',
-                        v4))));
-
-    log() << *e << "\n";
-
-    ir::Node *rOp = e->getRightOp();
-
-    // e->display("IR0");
-
-    ir::Node *newNode = new ir::Value<float>(42);
-    ir::Node::replace(&rOp, &newNode);
-    // e->display("IR1");
-
-    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
-    log() << "delete rOp\n";
-    rOp->clear();
-    delete rOp;
-    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
-
-    log() << "delete e\n";
-    e->clear();
-    delete e;
-    log() << "allocated Nodes: " << ir::Node::getNodeNumber() << "\n";
-
-#endif
-
     {
-    ir::Expr *x = new ir::Identifier("x");
-    ir::Expr *v1 = new ir::Value<float>(1.0);
-    ir::Expr *v2 = new ir::Value<float>(2.0);
-    ir::Expr *v3 = new ir::Value<float>(3.0);
-    ir::Expr *v4 = new ir::Identifier("y");
+        ir::Identifier h("H");
 
-    ir::Expr *root = new ir::BinExpr(x, '+', new ir::BinExpr(v1, '+', v2));
+        ir::Identifier Vx("Vx");
+        ir::Identifier Vy("Vy");
+        ir::Identifier Vz("Vz");
+        ir::VectExpr v(Vx, Vy, Vz);
 
-    ir::EqLst *eqs = new ir::EqLst();
-    eqs->push_back(new ir::Equation("testEQ", root, v3, NULL));
-    ir::Program *p = new ir::Program("", NULL, NULL, eqs);
+        std::cout << "#nodes: after var init: " << ir::Node::getNodeNumber() << "\n";
+#if 1
+        {
+            CartesianCoord cartesian;
 
-    // for (auto e: *eqs) {
-    //     e->display("expr");
-    // }
+            ir::VectExpr gradH = cartesian.grad(h);
+            gradH.display("grad in cartesian coordinates");
 
-    root->display("root");
-    p->replace(v1, v4);
-    root->display("root replaced");
+            ir::BinExpr divV = cartesian.div(v);
+            divV.display("div in cartesian coordinates");
 
-    p->replace(v4, v1);
-    root->display("root back inplace");
+            ir::VectExpr curlV = cartesian.curl(v);
+            curlV.display("curl in cartesian coordinates");
 
-
-    // for (auto e: *eqs) {
-    //     e->display("replaced");
-    // }
-
-    }
+            ir::BinExpr lapH = cartesian.div(cartesian.grad(h));
+            // ir::Equation poisson("poisson", lapH, ir::Value<float>(0), NULL);
+        }
+        std::cout << "remaining nodes (after cartesian coord): "
+            << ir::Node::getNodeNumber() << "\n";
+#endif
 
 #if 1
-    ir::Value<int> i0 = ir::Value<int>(0);
-    ir::Value<int> i1 = ir::Value<int>(0);
-    ir::Value<float> f0 = ir::Value<float>(0);
+        {
+            SphericalCoord spherical;
 
-    ir::Identifier id("id");
-    ir::Identifier l("l");
-    ir::Identifier id2("id");
+            ir::VectExpr gradH = spherical.grad(h);
+            gradH.display("grad in spherical coordinates");
 
-    ir::UnaryExpr ll(new ir::Identifier("l"), '\'');
-    ir::UnaryExpr ll2(new ir::Identifier("l"), '\'');
-    ir::UnaryExpr ll3(new ir::Identifier("ll"), '\'');
+            ir::BinExpr divV = spherical.div(v);
+            divV.display("div in spherical coordinates");
 
-    std::cout << "0.0 == 0: " << (i0 == f0) << "\n";
-    std::cout << "0 == 0: " << (i0 == i1) << "\n";
-    std::cout << "id == id2: " << (id == id2) << "\n";
-    std::cout << "id == l: " << (id == l) << "\n";
-
-    std::cout << "l' == l': " << (ll == ll2) << "\n";
-    std::cout << "l' == l': " << (ll == ll3) << "\n";
-
-    ir::Expr *e = new ir::BinExpr(&i0, '+', &i1);
-    std::cout << "op + priority: " << e->priority << "\n";
-    std::cout << "id priority: " << l.priority << "\n";
-
+            ir::VectExpr curlV = spherical.curl(v);
+            curlV.display("curl in spherical coordinates");
+        }
+        std::cout << "remaining nodes (after spherical coord): "
+            << ir::Node::getNodeNumber() << "\n";
 #endif
 
+#if 0
+        SpheroidalCoord spheroidal;
+
+        gradH = spheroidal.grad(h);
+        gradH->display("grad in spherical coordinates");
+        delete gradH;
+
+        divV = spheroidal.div(v);
+        divV->display("div in spherical coordinates");
+
+        // curlV = spheroidal.curl(v);
+        // curlV->display("curl in cartesian coordinates");
+#endif
+    }
+    std::cout << "remaining nodes: " << ir::Node::getNodeNumber() << "\n";
     return 0;
 }

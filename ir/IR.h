@@ -19,24 +19,24 @@ namespace ir {
 class Node : public DOT {
     private:
         static int nNode;
+
     protected:
         Node *parent;
         std::vector<Node *> children;
+        bool clearOnDelete;
 
     public:
         Node(Node *par = NULL);
         virtual ~Node();
-        Node *getParent();
+        Node *getParent() const;
         virtual void dump(std::ostream&) const;
-        virtual void dumpDOT(std::ostream&, std::string title="", bool root = true) const;
+        virtual void dumpDOT(std::ostream&,
+                std::string title="", bool root = true) const;
         std::vector<Node *>& getChildren();
-        std::vector<Node *> getLeafs();
-        bool isLeaf();
         std::string srcLoc;
         void setSourceLocation(std::string);
         void clear();
         static int getNodeNumber();
-        virtual Node *copy() = 0;
         void setParents();
         void setParent(ir::Node *);
 
@@ -46,6 +46,7 @@ class Node : public DOT {
         virtual bool operator!=(ir::Node&);
 };
 
+class BinExpr;
 class Expr : public Node {
     public:
         Expr(Node *p = NULL);
@@ -53,23 +54,76 @@ class Expr : public Node {
         virtual ~Expr();
 
         const int priority;
+
+        Expr *copy() const;
+};
+
+class VectExpr;
+class ScalarExpr : public Expr {
+    private:
+        BinExpr op(const ScalarExpr&, char) const;
+        VectExpr op(const VectExpr&, char) const;
+
+    public:
+        ScalarExpr(Node *p = NULL);
+        ScalarExpr(int priority, Node *p = NULL);
+
+        BinExpr operator+(const ScalarExpr&) const;
+        BinExpr operator-(const ScalarExpr&) const;
+        BinExpr operator*(const ScalarExpr&) const;
+        BinExpr operator/(const ScalarExpr&) const;
+        BinExpr operator^(const ScalarExpr&) const;
+
+        VectExpr operator+(const VectExpr&) const;
+        VectExpr operator-(const VectExpr&) const;
+        VectExpr operator*(const VectExpr&) const;
+        VectExpr operator/(const VectExpr&) const;
+        VectExpr operator^(const VectExpr&) const;
+};
+
+class VectExpr : public Expr {
+    private:
+        VectExpr op(const ScalarExpr&, char) const;
+        VectExpr op(const VectExpr&, char) const;
+
+    public:
+        VectExpr(ScalarExpr *, ScalarExpr *, ScalarExpr *);
+        VectExpr(const ScalarExpr&, const ScalarExpr&, const ScalarExpr&);
+        VectExpr(const VectExpr&);
+
+        ScalarExpr *getX() const;
+        ScalarExpr *getY() const;
+        ScalarExpr *getZ() const;
+        ScalarExpr *getComponent(int) const;
+        virtual void dump(std::ostream& os) const;
+        bool operator==(Node&);
+
+        VectExpr operator+(const VectExpr&) const;
+        VectExpr operator-(const VectExpr&) const;
+        VectExpr operator*(const VectExpr&) const;
+        VectExpr operator/(const VectExpr&) const;
+        VectExpr operator^(const VectExpr&) const;
+
+        VectExpr operator+(const ScalarExpr&) const;
+        VectExpr operator-(const ScalarExpr&) const;
+        VectExpr operator*(const ScalarExpr&) const;
+        VectExpr operator/(const ScalarExpr&) const;
+        VectExpr operator^(const ScalarExpr&) const;
 };
 
 template <class T>
-class Value : public Expr {
+class Value : public ScalarExpr {
     T value;
     public:
         inline Value(T val, Node *p = NULL) {
             value = val;
         }
-        inline T getValue() {
+        inline Value(const Value<T>& v) : Value<T>(v.getValue()) { }
+        inline T getValue() const {
             return value;
         }
         inline void dump(std::ostream &os) const {
             os << "Val: " << value;
-        }
-        virtual inline Node *copy() {
-            return new Value<T>(value);
         }
         inline bool operator==(Node& node) {
             try {
@@ -80,82 +134,97 @@ class Value : public Expr {
                 return false;
             }
         }
+        inline Value<T> operator=(T v) {
+            return Value(v);
+        }
 };
 
-class BinExpr : public Expr {
+class BinExpr : public ScalarExpr {
     protected:
         char op;
 
     public:
-        BinExpr(Expr *lOp, char op, Expr *rOp, Node *parent = NULL);
-        Expr *getRightOp() const;
-        Expr *getLeftOp() const;
-        char getOp();
+        BinExpr(ScalarExpr *lOp, char op, ScalarExpr *rOp, Node *parent = NULL);
+        BinExpr(const ScalarExpr& lOp, char op, const ScalarExpr& rOp, Node *parent = NULL);
+        BinExpr(const BinExpr&);
+
+        ScalarExpr *getRightOp() const;
+        ScalarExpr *getLeftOp() const;
+        char getOp() const;
         virtual void dump(std::ostream&) const;
-        virtual Node *copy();
         bool operator==(Node&);
 };
 
-class UnaryExpr : public Expr {
+class UnaryExpr : public ScalarExpr {
     protected:
         char op;
 
     public:
-        UnaryExpr(Expr *lOp, char op, Node *parent = NULL);
-        Expr *getExpr() const;
+        UnaryExpr(ScalarExpr *lOp, char op, Node *parent = NULL);
+        UnaryExpr(const ScalarExpr& lOp, char op, Node *parent = NULL);
+        UnaryExpr(const UnaryExpr&);
+
+        ScalarExpr *getExpr() const;
         char getOp() const;
         virtual void dump(std::ostream&) const;
-        virtual Node *copy();
         bool operator==(Node&);
 };
 
 class Symbol;
-class DiffExpr : public Expr {
+class DiffExpr : public ScalarExpr {
     protected:
         std::string order;
 
     public:
         DiffExpr(Expr *, Identifier *, std::string order = std::string("1"),
                 Node *p = NULL);
-        Expr *getExpr();
-        Identifier *getVar();
+        DiffExpr(const Expr&, const Identifier&, std::string order = std::string("1"),
+                Node *p = NULL);
+        DiffExpr(const DiffExpr&);
+        Expr *getExpr() const;
+        Identifier *getVar() const;
         void setOrder(std::string);
-        std::string getOrder();
+        std::string getOrder() const;
         virtual void dump(std::ostream&) const;
-        virtual Node *copy();
         bool operator==(Node&);
 };
 
 class ExprLst : public std::vector<Expr *> {
 };
 
-class Identifier : public Expr {
+class Identifier : public ScalarExpr {
     protected:
 
     public:
         Identifier(std::string n, int vectComponent = 0, Node *parent = NULL);
+        Identifier(const Identifier&);
+
         const std::string name;
         virtual void dump(std::ostream& os) const;
-        virtual Node *copy();
         bool operator==(Node&);
         const int vectComponent;
 };
 
 class FuncCall : public Identifier {
     public:
-        FuncCall(std::string, ExprLst *args = NULL, Node *p = NULL);
-        FuncCall(std::string, Expr *arg, Node *p = NULL);
+        FuncCall(std::string name, ExprLst *args = NULL, Node *p = NULL);
+        FuncCall(std::string name, Expr *arg, Node *p = NULL);
+        FuncCall(std::string name, const Expr& arg, Node *p = NULL);
+        FuncCall(const FuncCall&);
+
         virtual void dump(std::ostream& os) const;
-        ExprLst *getArgs();
-        virtual Node *copy();
+        ExprLst getArgs() const;
         bool operator==(Node&);
 };
 
 class ArrayExpr : public Identifier {
     public:
         ArrayExpr(std::string name, ExprLst *indices, Node *p = NULL);
-        ExprLst *getIndices();
-        virtual Node *copy();
+        ArrayExpr(std::string name, ScalarExpr *index, Node *p = NULL);
+        ArrayExpr(std::string name, ScalarExpr& index, Node *p = NULL);
+        ArrayExpr(const ArrayExpr&);
+
+        ExprLst getIndices() const;
         bool operator==(Node&);
 };
 
@@ -165,33 +234,33 @@ class Decl : public Node {
 
     public:
         Decl(Expr *, Expr *);
-        Expr *getLHS();
-        Expr *getDef();
+
+        Expr *getLHS() const;
+        Expr *getDef() const;
         virtual void dump(std::ostream& os) const;
-        virtual Node *copy();
         bool operator==(Node&);
 };
 
-class DeclLst : public std::list<Decl *> {
-};
+class DeclLst : public std::list<Decl *> { };
 
 class BCLst;
 class Equation : public Node {
     public:
         Equation(std::string name, Expr *lhs, Expr *rhs, BCLst *bc, Node *p = NULL);
-        Equation(std::string name, Equation *eq);
+        Equation(std::string name, const Expr& lhs, const Expr& rhs,
+                BCLst *bc, Node *p = NULL);
+        Equation(std::string name, Equation &eq);
+
         const std::string name;
         virtual void dump(std::ostream& os) const;
-        Expr *getLHS();
-        Expr *getRHS();
-        BCLst *getBCs();
-        virtual Node *copy();
+        Expr *getLHS() const;
+        Expr *getRHS() const;
+        BCLst *getBCs() const;
         bool operator==(Node&);
         void setBCs(ir::BCLst *);
 };
 
-class EqLst : public std::list<Equation *> {
-};
+class EqLst : public std::list<Equation *> { };
 
 class BC : public Node {
     protected:
@@ -201,12 +270,11 @@ class BC : public Node {
     public:
         BC(Equation *cond, Equation *loc, Node *p = NULL);
         virtual void dump(std::ostream& os) const;
-        virtual Node *copy();
         bool operator==(Node&);
-        Equation *getLoc();
-        Equation *getCond();
+        Equation *getLoc() const;
+        Equation *getCond() const;
         void setEqLoc(int);
-        int getEqLoc();
+        int getEqLoc() const;
 };
 
 class BCLst : public std::list<BC *> {
@@ -214,17 +282,18 @@ class BCLst : public std::list<BC *> {
 
 class Program : public DOT {
     private:
-        SymTab * symTab;
+        SymTab *symTab;
         DeclLst *decls;
         EqLst *eqs;
 
     public:
         Program(std::string, SymTab *, DeclLst *decls, EqLst *eqs);
+        ~Program();
         void buildSymTab();
         virtual void dumpDOT(std::ostream& os, std::string title, bool root = true) const;
-        SymTab *getSymTab();
-        EqLst *getEqs();
-        DeclLst *getDecls();
+        SymTab& getSymTab();
+        EqLst& getEqs();
+        DeclLst& getDecls();
 
         void replace(Node *, Node *);
 
@@ -233,9 +302,10 @@ class Program : public DOT {
 
 class IndexRange : public BinExpr {
     public:
-        IndexRange(Expr *lb, Expr *ub, Node *p = NULL);
-        Expr *getLB();
-        Expr *getUB();
+        IndexRange(ScalarExpr *lb, ScalarExpr *ub, Node *p = NULL);
+        IndexRange(const IndexRange&);
+        ScalarExpr *getLB() const;
+        ScalarExpr *getUB() const;
 };
 
 class IndexRangeLst : public std::list<IndexRange *> {
@@ -247,6 +317,7 @@ class Symbol {
         bool internal;
     public:
         Symbol(std::string name, Expr *def = NULL, bool internal = false);
+        ~Symbol();
         const std::string name;
         virtual Expr *getDef();
         bool isInternal();
@@ -290,8 +361,38 @@ class Scalar : public Symbol {
         Scalar(std::string n);
 };
 
-}
+VectExpr crossProduct(const Expr&, const Expr&);
+BinExpr dotProduct(const Expr&, const Expr&);
 
-std::ostream& operator<<(std::ostream& , ir::Node&);
+UnaryExpr operator-(ScalarExpr&);
+VectExpr operator-(VectExpr&);
+
+BinExpr operator/(float, const ScalarExpr&);
+VectExpr operator/(float, const VectExpr&);
+BinExpr operator/(int, const ScalarExpr&);
+VectExpr operator/(int, const VectExpr&);
+BinExpr operator^(const ScalarExpr&, int);
+VectExpr operator^(const VectExpr&, int);
+
+Expr& operator+(const Expr&, const Expr&);
+Expr& operator-(const Expr&, const Expr&);
+Expr& operator*(const Expr&, const Expr&);
+Expr& operator/(const Expr&, const Expr&);
+Expr& operator^(const Expr&, const Expr&);
+
+ScalarExpr *scalar(Expr *);
+VectExpr *vector(Expr *);
+ScalarExpr& scalar(Expr&);
+VectExpr& vector(Expr&);
+
+bool isScalar(Expr *);
+bool isVect(Expr *);
+
+FuncCall sin(const ScalarExpr&);
+FuncCall cos(const ScalarExpr&);
+
+} // end namespace ir
+
+std::ostream& operator<<(std::ostream&, ir::Node&);
 
 #endif

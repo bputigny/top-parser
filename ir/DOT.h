@@ -9,6 +9,7 @@
 class DOT {
     private:
         static void displayFile(const std::string& file);
+
     public:
         virtual void dumpDOT(std::ostream&, std::string = "", bool = true) const = 0;
         void display(std::string = "");

@@ -12,6 +12,7 @@ extern "C" {
 
 #include "parser.hpp"
 #include "IR.h"
+#include "Coord.h"
 #include "FrontEnd.h"
 #include "Printer.h"
 #include "config.h"
@@ -27,6 +28,8 @@ SymTab *progParams = NULL;
 
 extern std::string *filename;
 
+SphericalCoord spherical;
+
 #define SRC_LOC (*filename + ":" + std::to_string(yylineno));
 
 %}
@@ -35,7 +38,6 @@ extern std::string *filename;
     int num;
     double real;
     std::string *str;
-    char op;
 
     ir::Node *node;
     ir::Expr *expr;
@@ -58,8 +60,9 @@ extern std::string *filename;
 %token <num> NUM
 %token <str> ID KW_TYPE
 
-%token KW_LET KW_IN KW_WITH KW_AT KW_EQ KW_NO_LM0
+%token KW_LET KW_IN KW_WITH KW_AT KW_EQ
 %token KW_PARAM KW_VAR KW_LAMBDA KW_FIELD KW_SCAL
+%token KW_DIV KW_GRAD KW_CROSS
 
 %type<expr> expr primary_expr postfix_expr unary_expr factor const
 
@@ -67,7 +70,6 @@ extern std::string *filename;
 %type<decl> declaration
 %type<eq> equation_def equation equation_with_bc
 %type<indexRange> index
-%type<op> unary_operator
 
 %type<eqList> equation_list
 %type<bcList> bc_list
@@ -110,52 +112,62 @@ param_list
 : KW_PARAM KW_TYPE var_names        { if (progParams == NULL) progParams = new SymTab();
                                       for (auto n: *$3) {
                                           progParams->add(new ir::Param(n->name, *$2));
+                                          delete n;
                                       }
+                                      delete $3;
                                     }
 
 | KW_VAR var_names                  { if (progParams == NULL) progParams = new SymTab();
                                       for (auto n: *$2) {
                                           progParams->add(new ir::Variable(n->name,
                                               n->vectComponent));
+                                          delete n;
                                       }
+                                      delete $2;
                                     }
 | KW_FIELD var_names                { if (progParams == NULL) progParams = new SymTab();
                                       for (auto n: *$2) {
                                           progParams->add(new ir::Field(n->name));
+                                          delete n;
                                       }
+                                      delete $2;
                                     }
 | KW_SCAL var_names                 { if (progParams == NULL) progParams = new SymTab();
                                       for (auto n: *$2) {
                                           progParams->add(new ir::Scalar(n->name));
+                                          delete n;
                                       }
+                                      delete $2;
                                     }
 ;
 
 var_names
-: var_names ',' ID                  { $$ = $1; $$->push_back(new ir::Identifier(*$3)); }
+: var_names ',' ID                  { $$ = $1; $$->push_back(new ir::Identifier(*$3));
+                                      delete $3; }
 | ID                                { $$ = new std::vector<ir::Identifier *>();
-                                      $$->push_back(new ir::Identifier(*$1)); }
+                                      $$->push_back(new ir::Identifier(*$1));
+                                      delete $1; }
 | '(' ID ',' ID ',' ID ')'          { $$ = new std::vector<ir::Identifier *>();
                                       $$->push_back(new ir::Identifier(*$2, 1));
                                       $$->push_back(new ir::Identifier(*$4, 2));
-                                      $$->push_back(new ir::Identifier(*$6, 3)); }
+                                      $$->push_back(new ir::Identifier(*$6, 3));
+                                      delete $2, delete $4, delete $6; }
 | var_names ',' '(' ID ',' ID ',' ID ')' {
                                       $$ = $1;
                                       $$->push_back(new ir::Identifier(*$4, 1));
                                       $$->push_back(new ir::Identifier(*$6, 2));
-                                      $$->push_back(new ir::Identifier(*$8, 3)); }
+                                      $$->push_back(new ir::Identifier(*$8, 3));
+                                      delete $4, delete $6, delete $8; }
 ;
 
 expr
 : factor                            { $$ = $1; }
-| expr '+' factor                   { $$ = new ir::BinExpr($1,
-                                                    '+',
-                                                    $3);
+| expr '+' factor                   { $$ = (*$1 + *$3).copy();
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
-| expr '-' factor                   { $$ = new ir::BinExpr($1,
-                                                    '-',
-                                                    $3);
+| expr '-' factor                   { $$ = (*$1 - *$3).copy();
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
 ;
@@ -163,51 +175,85 @@ expr
 factor
 : unary_expr                        { $$ = $1; }
 
-| factor '*' unary_expr             { $$ = new ir::BinExpr($1,
-                                                    '*',
-                                                    $3);
+| factor '*' unary_expr             { $$ = (*$1 * *$3).copy();
+                                      delete $1, delete $3;
+                                      $$->srcLoc = SRC_LOC;
+                                    }
+| factor '.' unary_expr             { $$ = new ir::BinExpr(ir::dotProduct(*$1, *$3));
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
 
-| factor '/' unary_expr             { $$ = new ir::BinExpr($1,
-                                                    '/',
-                                                    $3);
+| factor '/' unary_expr             { $$ = (*$1 / *$3).copy();
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
 ;
 
 unary_expr
 : postfix_expr                      { $$ = $1; }
-| unary_expr '^' unary_expr         { $$ = new ir::BinExpr($1,
-                                                    '^',
-                                                    $3);
+| unary_expr '^' unary_expr         { $$ = (*$1 ^ *$3).copy();
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
-| unary_operator unary_expr         { $$ = new ir::UnaryExpr($2, $1);
+| '-' unary_expr                    { if (isScalar($2)) {
+                                        $$ = (-scalar(*$2)).copy();
+                                      }
+                                      else {
+                                        $$ = (-vector(*$2)).copy();
+                                      }
+                                      delete $2;
                                       $$->srcLoc = SRC_LOC; }
-| unary_expr '\''                   { $$ = new ir::UnaryExpr($1, '\'');
-                                      $$->srcLoc = SRC_LOC; }
-;
-
-unary_operator
-: '-'                               { $$ = '-'; }
+| unary_expr '\''                   { if (auto se = dynamic_cast<ir::ScalarExpr *>($1)) {
+                                          $$ = new ir::UnaryExpr(se, '\'');
+                                          $$->srcLoc = SRC_LOC;
+                                      }
+                                      else {
+                                          yyerror("derivative of vector expression");
+                                      }
+                                    }
 ;
 
 postfix_expr
 : primary_expr                      { $$ = $1; }
 | ID '[' index_list ']'             { $$ = new ir::ArrayExpr(*$1, $3);
+                                      delete $1, delete $3;
                                       $$->srcLoc = SRC_LOC;
                                     }
 | ID '('  arg_list  ')'             { $$ = new ir::FuncCall(*$1, $3);
+                                      delete $1;
+                                      $$->srcLoc = SRC_LOC;
+                                    }
+| KW_DIV '(' expr ')'               { $$ = new ir::BinExpr(spherical.div(*$3));
+                                      delete $3;
+                                      $$->srcLoc = SRC_LOC;
+                                    }
+| KW_GRAD '(' expr ')'              { $$ = new ir::VectExpr(spherical.grad(*$3));
+                                      delete $3;
+                                      $$->srcLoc = SRC_LOC;
+                                    }
+| KW_CROSS '(' expr ',' expr ')'    { if (!isVect($3) || !isVect($5))
+                                          yyerror("cross product can only be applied to vectors");
+                                      $$ = new ir::VectExpr(ir::crossProduct(*$3, *$5));
+                                      delete $3, delete $5;
                                       $$->srcLoc = SRC_LOC;
                                     }
 | ID '('          ')'               { $$ = new ir::FuncCall(*$1);
+                                      $$->srcLoc = SRC_LOC;
+                                    }
+| '[' expr ',' expr ',' expr ']'    { if (!isScalar($2) || !isScalar($4) || !isScalar($6))
+                                        yyerror("building vector from non scalar expression");
+                                        $$ = new ir::VectExpr(
+                                        scalar($2),
+                                        scalar($4),
+                                        scalar($6));
                                       $$->srcLoc = SRC_LOC;
                                     }
 ;
 
 primary_expr
 : ID                                { $$ = new ir::Identifier(*$1);
+                                      delete $1;
                                       $$->srcLoc = SRC_LOC; }
 | KW_LAMBDA                         { $$ = new ir::Identifier("fp");
                                       $$->srcLoc = SRC_LOC; }
@@ -252,7 +298,10 @@ equation
 ;
 
 equation_def
-: KW_EQ ID ':' equation_with_bc     { $$ = new ir::Equation(*$2, $4); }
+: KW_EQ ID ':' equation_with_bc     { $$ = new ir::Equation(*$2, *$4);
+                                      delete $2, delete $4;
+                                      std::cout << "new equation: " << ir::Node::getNodeNumber() << " nodes\n";
+                                    }
 ;
 
 equation_with_bc
