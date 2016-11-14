@@ -6,7 +6,7 @@ AM_YFLAGS = -d
 AM_CXXFLAGS = -I$(srcdir)/.. -I$(srcdir)/../ir -I$(srcdir)/../utils
 
 noinst_LTLIBRARIES = libparser.la
-noinst_bindir = .
+noinst_bindir = $(abs_top_builddir)
 noinst_bin_PROGRAMS = test-frontend
 
 libparser_la_SOURCES = Analysis.cpp parser.ypp scanner.lpp FrontEnd.cpp

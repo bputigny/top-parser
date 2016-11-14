@@ -300,7 +300,6 @@ equation
 equation_def
 : KW_EQ ID ':' equation_with_bc     { $$ = new ir::Equation(*$2, *$4);
                                       delete $2, delete $4;
-                                      std::cout << "new equation: " << ir::Node::getNodeNumber() << " nodes\n";
                                     }
 ;
 

@@ -330,7 +330,9 @@ Identifier::Identifier(std::string n, int vectComponent, Node *p) :
     ScalarExpr(p), name(n), vectComponent(vectComponent) { }
 
 Identifier::Identifier(const Identifier& id) :
-    Identifier(id.name, id.vectComponent) { }
+    Identifier(id.name, id.vectComponent) {
+        this->srcLoc = id.srcLoc;
+}
 
 void Identifier::dump(std::ostream& os) const {
     os << "ID: " << name;

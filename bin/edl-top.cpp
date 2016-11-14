@@ -44,83 +44,75 @@ void help(char *bin) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string *outFileName = NULL, *latexFileName = NULL;
-    char c;
-    int nfile = 0;
-    bool force = false, latex = false;
+    {
+        std::string *outFileName = NULL, *latexFileName = NULL;
+        char c;
+        int nfile = 0;
+        bool force = false, latex = false;
 
-    Printer::init();
+        Printer::init();
 
-    while ((c = getopt(argc, argv, "o:fhv:l:")) != EOF) {
-        switch (c) {
-        case 'h':
-            help(argv[0]);
-            exit(EXIT_SUCCESS);
-            break;
-        case 'f':
-            force = true;
-            break;
-        case 'o':
-            outFileName = new std::string(optarg);
-            break;
-        case 'v':
-            Printer::init(atoi(optarg));
-            break;
-        case 'l':
-            latex = true;
-            latexFileName = new std::string(optarg);
-            break;
-        }
-    }
-    if (optind < argc) {
-        while ((optind + nfile) < argc) {
-            filename = new std::string(argv[optind + nfile]);
-            yyin = fopen(filename->c_str(), "r");
-            if (!yyin) {
-                err << "cannot open input file `" << *filename << "'\n";
-                exit(EXIT_FAILURE);
+        while ((c = getopt(argc, argv, "o:fhv:l:")) != EOF) {
+            switch (c) {
+                case 'h':
+                    help(argv[0]);
+                    exit(EXIT_SUCCESS);
+                    break;
+                case 'f':
+                    force = true;
+                    break;
+                case 'o':
+                    outFileName = new std::string(optarg);
+                    break;
+                case 'v':
+                    Printer::init(atoi(optarg));
+                    break;
+                case 'l':
+                    latex = true;
+                    latexFileName = new std::string(optarg);
+                    break;
             }
-            nfile++;
         }
+        if (optind < argc) {
+            while ((optind + nfile) < argc) {
+                filename = new std::string(argv[optind + nfile]);
+                yyin = fopen(filename->c_str(), "r");
+                if (!yyin) {
+                    err << "cannot open input file `" << *filename << "'\n";
+                    exit(EXIT_FAILURE);
+                }
+                nfile++;
+            }
+        }
+        if (nfile != 1) {
+            usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
+
+
+        if (!force && access(optarg, F_OK) != -1) {
+            err << "File `" << optarg << "' already exists\n";
+            exit(EXIT_FAILURE);
+        }
+
+        FrontEnd fe;
+        std::cout << "before parsing: "
+            << ir::Node::getNodeNumber() << " nodes\n";
+        ir::Program *p = fe.parse(*filename);
+        std::cout << "after parsing: "
+            << ir::Node::getNodeNumber() << " nodes\n";
+
+        p->display();
+
+        fclose(yyin);
+        delete filename;
+        delete p;
+        std::cout << "after delete prog: "
+            << ir::Node::getNodeNumber() << " nodes\n";
     }
-    if (nfile != 1) {
-        usage(argv[0]);
-        exit(EXIT_FAILURE);
-    }
 
+    std::cout << "exiting with: "
+        << ir::Node::getNodeNumber() << " uncleaned nodes\n";
 
-    if (!force && access(optarg, F_OK) != -1) {
-        err << "File `" << optarg << "' already exists\n";
-        exit(EXIT_FAILURE);
-    }
-
-    FrontEnd fe;
-    ir::Program *p = fe.parse(*filename);
-    TopBackEnd topBackEnd(p);
-    FortranOutput *o;
-    std::ofstream ofs;
-    if (outFileName) {
-        ofs.open(*outFileName);
-        o = new FortranOutput(ofs);
-    }
-    else {
-        o = new FortranOutput(std::cout);
-    }
-
-    if (latex) {
-        LatexOutput *lo;
-        std::ofstream lofs;
-        lofs.open(*latexFileName);
-        lo = new LatexOutput(lofs);
-        topBackEnd.emitLaTeX(*lo);
-        lofs.close();
-    }
-
-    topBackEnd.emitCode(*o);
-
-    delete o;
-
-    fclose(yyin);
-    delete filename;
     return 0;
 }

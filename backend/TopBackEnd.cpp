@@ -13,8 +13,12 @@
     exit(EXIT_FAILURE); \
 }
 
+#ifdef DEBUG
 #define err \
     err <<  __FILE__ << ":" << __LINE__ << ": "
+#endif
+
+LaTeXRenamer *renamer;
 
 ir::Identifier fp("fp");
 ir::Identifier l("l");
@@ -35,12 +39,6 @@ LlExpr::LlExpr(int ivar, ir::Expr *expr) {
 
     auto ids = getIds(expr);
 
-    // if (ids.size() != 1) {
-    //     err << "building llExpr from non compatible expression\n";
-    //     expr->display();
-    //     exit(EXIT_FAILURE);
-    // }
-    // else {
     if (expr->contains(ll))
         this->type = "ll";
     else if (expr->contains(l))
@@ -115,11 +113,22 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
         if (isDef(id->name)) {
             fo << id->name;
             if (bcLocation != "" && isField(id->name)) {
-                fo << "(" << bcLocation << ", 1:lres)";
+                if (this->dim == 1)
+                    fo << "(" << bcLocation << ")";
+                else if (this->dim == 2)
+                    fo << "(" << bcLocation << ", 1:lres)";
+                else {
+                    err << "Dimension " << this->dim << " not supported\n";
+                    exit(EXIT_FAILURE);
+                }
             }
         }
         else {
-            err << "`" << id->name << "\' is undefined\n";
+            if (id->srcLoc != "unknown")
+                err << id->srcLoc << ": " <<
+                    "`" << id->name << "\' is undefined\n";
+            else
+                err << "`" << id->name << "\' is undefined\n";
             exit(EXIT_FAILURE);
         }
     }
@@ -135,7 +144,9 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
 }
 
 Term::Term(ir::Expr *expr, ir::Expr *llTerm, ir::Symbol var,
-                int power, std::string der, int ivar, std::string varName) : var(var) {
+                int power, std::string der, int ivar, std::string varName,
+                TopBackEnd* backend) : var(var) {
+    this->backend = backend;
     this->expr = expr;
     if (llTerm)
         this->llExpr = new LlExpr(ivar, llTerm);
@@ -149,7 +160,12 @@ Term::Term(ir::Expr *expr, ir::Expr *llTerm, ir::Symbol var,
     this->idx = 0;
 }
 
-TermBC::TermBC(Term t) : Term(t.expr, NULL, t.var, t.power, t.der, t.ivar, t.varName) {
+TopBackEnd *Term::getBackend() {
+    return backend;
+}
+
+TermBC::TermBC(Term t) : Term(t.expr, NULL, t.var, t.power, t.der, t.ivar, t.varName,
+        t.getBackend()) {
     if (t.llExpr)
         this->llExpr = new LlExpr(t.ivar, t.llExpr->expr);
     varLoc = "1";
@@ -160,6 +176,10 @@ std::string Term::getMatrixI() {
     switch (this->getType()) {
         case AS:
             return "dm(1)\%asi";
+        case AR:
+            return "dm(1)\%ari";
+        case ASBC:
+            return "dm(1)\%asbci";
         case ART:
             return "dm(1)\%arti";
         case ARTT:
@@ -180,6 +200,14 @@ std::string Term::getMatrix(IndexType it) {
                     exit(EXIT_FAILURE);
             }
             return "dm(1)\%as(" + idx + ")";
+        case AR:
+            switch(it) {
+                case FULL:
+                    return "dm(1)\%ar(1:grd(1)\%nr, " + idx + ")";
+                default:
+                    err << "cannot access subscript of `AR\' terms\n";
+                    exit(EXIT_FAILURE);
+            }
         case ART:
             switch(it) {
                 case FULL:
@@ -198,6 +226,14 @@ std::string Term::getMatrix(IndexType it) {
                     return "dm(1)\%artt(1:grd(1)\%nr, j, 1:nt, " + idx + ")";
                 case TT:
                     return "dm(1)\%artt(1:grd(1)\%nr, 1:nt, jj, " + idx + ")";
+            }
+        case ASBC:
+            switch(it) {
+                case FULL:
+                    return "dm(1)\%asbc(" + idx + ")";
+                default:
+                    err << "cannot access subscript of `ATBC\' terms\n";
+                    exit(EXIT_FAILURE);
             }
         case ATBC:
             switch(it) {
@@ -272,23 +308,44 @@ ir::FuncCall *isCoupling(ir::Expr *e) {
     return NULL;
 }
 
+ir::FuncCall *isAvg(ir::Expr *e) {
+    if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
+        if (fc->name == "avg") {
+            return fc;
+        }
+    }
+    return NULL;
+}
+
 TermType Term::getType() {
     if (isCoupling(expr)) {
         return ARTT;
     }
+    if (isAvg(expr)) {
+        return AR;
+    }
+    if (dynamic_cast<ir::FuncCall *>(expr))
+        return AR;
     else {
         if (llExpr) {
-            // TODO: not sure it is correct: we can have a rtt term is the
+            // TODO: not sure it is correct: we can have a rtt term if the
             // llExpr depends on l'
             return ART;
         }
         else {
+            std::vector<ir::Identifier *> ids = getIds(expr, true);
+            for (auto id: ids) {
+                if (backend->isField(id->name))
+                    return AR;
+            }
             return AS;
         }
     }
 }
 
 TermType TermBC::getType() {
+    if (backend->dim == 1)
+        return ASBC;
     if (isCoupling(expr)) {
         return ATTBC;
     }
@@ -375,7 +432,7 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
                 else
                     unsupported(t);
             }
-            else 
+            else
                 unsupported(t);
         }
         else if (auto id = dynamic_cast<ir::Identifier *>(t)) {
@@ -413,9 +470,13 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
     }
 #endif
 
+    if (llExpr && dim == 1) {
+        err << "cannot have ll expression with 1D equation\n";
+        exit(EXIT_FAILURE);
+    }
     return new Term(expr, llExpr,
             ir::Symbol(var->name),
-            power, der, ivar, varName);
+            power, der, ivar, varName, this);
 }
 
 int TopBackEnd::computeTermIndex(Term *term) {
@@ -423,6 +484,9 @@ int TopBackEnd::computeTermIndex(Term *term) {
         case AS:
             this->nas++;
             return nas;
+        case AR:
+            this->nar++;
+            return nar;
         case ART:
             this->nart++;
             return nart;
@@ -432,6 +496,9 @@ int TopBackEnd::computeTermIndex(Term *term) {
         case ATBC:
             this->natbc++;
             return natbc;
+        case ASBC:
+            this->nasbc++;
+            return nasbc;
         case ATTBC:
             this->nattbc++;
             return nattbc;
@@ -476,6 +543,8 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
     int ieq = 0;
 
     this->nas = 0;
+    this->nar = 0;
+    this->nasbc = 0;
     this->nart = 0;
     this->nartt = 0;
     this->natbc = 0;
@@ -512,7 +581,6 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
                 this->simplify(rhs);
 
                 if (isZero(rhs)) {
-                    // eq = (ir::Expr *) lhs->copy();
                     eq = dynamic_cast<ir::Expr *>(lhs);
                 }
                 else if (isZero(lhs)) {
@@ -544,7 +612,7 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
     }
 }
 
-TopBackEnd::TopBackEnd(ir::Program *p) {
+TopBackEnd::TopBackEnd(ir::Program *p, int dim) : dim(dim) {
     this->prog = p;
     this->nas = 0;
     this->nartt = 0;
@@ -770,7 +838,6 @@ std::vector<ir::Expr *> *TopBackEnd::splitIntoTerms(ir::Expr *e) {
                         rLeft->push_back(expr);
                     }
                 }
-                // delete(rRight);
                 return rLeft;
             case '*':
                 r = new std::vector<ir::Expr *>();
@@ -960,6 +1027,19 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
             emitExpr(term->expr, fo, term->ivar, term->ieq, true);
             fo << "\n";
             break;
+        case AR:
+            if (ir::FuncCall *fc = isAvg(term->expr)) {
+                fo << "      call avg(";
+                emitExpr(fc->getArgs()[0], fo, term->ivar, term->ieq, true);
+                fo << ", " << term->getMatrix(FULL);
+                fo << ")";
+            }
+            else {
+                fo << "      " << term->getMatrix(FULL) << " = ";
+                emitExpr(term->expr, fo, term->ivar, term->ieq, true);
+            }
+            fo << "\n";
+            break;
         case ARTT:
             if (auto fc = isCoupling(term->expr)) {
                 ir::Expr *arg = dynamic_cast<ir::Expr *>(term->expr->getChildren()[0]);
@@ -1026,6 +1106,7 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
 void TopBackEnd::emitTerm(FortranOutput& fo, TermBC *term) {
     std::string bcLoc = term->varLoc;
     switch(term->getType()) {
+        case ASBC:
         case ATBC:
             fo << "      " << term->getMatrix(FULL) << " = ";
             emitExpr(term->expr, fo, term->ivar, term->ieq, true, bcLoc);
@@ -1183,16 +1264,17 @@ void TopBackEnd::emitCode(FortranOutput& fo) {
     }
 
     for (auto e: prog->getEqs()) {
+        int it = 0;
         fo << "!------------------------------------------------------------\n";
         fo << "! Coupling coefficients for equation " << e->name << "\n";
         fo << "!------------------------------------------------------------\n";
         fo << "      subroutine eq_" << e->name << "()\n\n";
         emitUseModel(fo);
-        fo << "      use inputs\n";
-        fo << "      use integrales\n";
         fo << "      implicit none\n";
         fo << "      integer i, j, jj\n";
+
         for (auto t: eqs[e->name]) {
+            it++;
             if (auto tbc = dynamic_cast<TermBC *>(t)) {
                 this->emitTerm(fo, tbc);
             }
@@ -1309,6 +1391,8 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs << "    character*(4), save :: mattype\n";
     inputs << "    character*(4), save :: dertype\n";
     inputs << "    double precision, save :: shift\n";
+    inputs << "    integer, save :: lres\n";
+    inputs << "    integer, save :: orderFD\n";
     inputs << "    integer, save :: nsol\n";
 
     for (auto s: this->prog->getSymTab()) {
@@ -1346,8 +1430,11 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs << "        nt = fetch('nt', 0)\n";
     inputs << "        shift = fetch('shift', 0d0)\n";
     inputs << "        nsol = fetch('nsol', 4)\n\n";
+    inputs << "        lres = fetch('lres', 1)\n\n";
     inputs << "        mattype = fetch('mattype', 'FULL')\n";
     inputs << "        dertype = fetch('dertype', 'CHEB')\n\n";
+    inputs << "        orderFD = fetch('orderFD', 1)\n\n";
+
     for (auto s: this->prog->getSymTab()) {
         if (auto p = dynamic_cast<ir::Param *>(s)) {
             std::string default_value;
@@ -1395,9 +1482,6 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
     fo << "\n      subroutine init_a()\n\n";
 
-    fo << "      use model\n";
-    fo << "      use integrales\n\n";
-
     fo << "      implicit none\n";
     fo << "      integer j, der_min, der_max\n\n";
 
@@ -1427,12 +1511,6 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
             fo << "abs(m) + iparity\n";
     }
 
-    // for (auto lv: lvar_set) {
-    //     if (lv.second == false) {
-    //         err << "lvar for variable `" << lv.first << "\' is not set\n";
-    //         exit(EXIT_FAILURE);
-    //     }
-    // }
     for (auto le: leq_set) {
         if (le.second == false) {
             err << "leq for equation `" << le.first << "\' is not set\n";
@@ -1458,35 +1536,53 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
     fo << "      dm(1)\%offset = 0\n";
     fo << "      dm(1)\%nas = " << nas << "\n";
-    fo << "      dm(1)\%nart = " << nart << "\n";
-    fo << "      dm(1)\%nartt = " << nartt << "\n";
-    fo << "      idm(1,1)\%natbc = " << natbc << "\n";
-    fo << "      idm(1,1)\%nattbc = " << nattbc << "\n";
 
     fo << "      allocate(dm(1)\%as(dm(1)\%nas))\n";
     fo << "      allocate(dm(1)\%asi(4, dm(1)\%nas))\n";
     fo << "      dm(1)\%as = 0d0\n";
     fo << "      dm(1)\%asi = 0\n\n";
 
-    fo << "      allocate(dm(1)\%art(grd(1)\%nr, nt, dm(1)\%nart))\n";
-    fo << "      allocate(dm(1)\%arti(4, dm(1)\%nart))\n";
-    fo << "      dm(1)\%art = 0d0\n";
-    fo << "      dm(1)\%arti = 0\n\n";
+    if (this->dim == 1) {
+        fo << "      dm(1)\%nar = " << nar << "\n";
 
-    fo << "      allocate(dm(1)\%artt(grd(1)\%nr, nt, nt, dm(1)\%nartt))\n";
-    fo << "      allocate(dm(1)\%artti(4, dm(1)\%nartt))\n";
-    fo << "      dm(1)\%artt = 0d0\n";
-    fo << "      dm(1)\%artti = 0\n\n";
+        fo << "      allocate(dm(1)\%ar(grd(1)\%nr, dm(1)\%nar))\n";
+        fo << "      allocate(dm(1)\%ari(4, dm(1)\%nar))\n";
+        fo << "      dm(1)\%ar = 0d0\n";
+        fo << "      dm(1)\%ari = 0\n\n";
 
-    fo << "      allocate(idm(1, 1)\%atbc(nt, idm(1, 1)\%natbc))\n";
-    fo << "      allocate(idm(1, 1)\%atbci(6, idm(1, 1)\%natbc))\n";
-    fo << "      idm(1, 1)\%atbc = 0d0\n";
-    fo << "      idm(1, 1)\%atbci = 0\n\n";
+        fo << "      dm(1)\%nasbc = " << nasbc << "\n";
+        fo << "      allocate(dm(1)\%asbc(dm(1)\%nasbc))\n";
+        fo << "      allocate(dm(1)\%asbci(6, dm(1)\%nasbc))\n";
+        fo << "      dm(1)\%asbc = 0d0\n";
+        fo << "      dm(1)\%asbci = 0\n\n";
+    }
 
-    fo << "      allocate(idm(1, 1)\%attbc(nt, nt, idm(1, 1)\%nattbc))\n";
-    fo << "      allocate(idm(1, 1)\%attbci(6, idm(1, 1)\%nattbc))\n";
-    fo << "      idm(1, 1)\%attbc = 0d0\n";
-    fo << "      idm(1, 1)\%attbci = 0\n\n";
+    if (this->dim == 2) {
+        fo << "      dm(1)\%nart = " << nart << "\n";
+        fo << "      dm(1)\%nartt = " << nartt << "\n";
+        fo << "      idm(1,1)\%natbc = " << natbc << "\n";
+        fo << "      idm(1,1)\%nattbc = " << nattbc << "\n";
+
+        fo << "      allocate(dm(1)\%art(grd(1)\%nr, nt, dm(1)\%nart))\n";
+        fo << "      allocate(dm(1)\%arti(4, dm(1)\%nart))\n";
+        fo << "      dm(1)\%art = 0d0\n";
+        fo << "      dm(1)\%arti = 0\n\n";
+
+        fo << "      allocate(dm(1)\%artt(grd(1)\%nr, nt, nt, dm(1)\%nartt))\n";
+        fo << "      allocate(dm(1)\%artti(4, dm(1)\%nartt))\n";
+        fo << "      dm(1)\%artt = 0d0\n";
+        fo << "      dm(1)\%artti = 0\n\n";
+
+        fo << "      allocate(idm(1, 1)\%atbc(nt, idm(1, 1)\%natbc))\n";
+        fo << "      allocate(idm(1, 1)\%atbci(6, idm(1, 1)\%natbc))\n";
+        fo << "      idm(1, 1)\%atbc = 0d0\n";
+        fo << "      idm(1, 1)\%atbci = 0\n\n";
+
+        fo << "      allocate(idm(1, 1)\%attbc(nt, nt, idm(1, 1)\%nattbc))\n";
+        fo << "      allocate(idm(1, 1)\%attbci(6, idm(1, 1)\%nattbc))\n";
+        fo << "      idm(1, 1)\%attbc = 0d0\n";
+        fo << "      idm(1, 1)\%attbci = 0\n\n";
+    }
 
     fo << "      allocate(dm(1)\%var_name(" << nvar << "))\n";
     fo << "      allocate(dm(1)\%var_keep(" << nvar << "))\n";
@@ -1511,9 +1607,19 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     }
 
     fo << "      power_max = " << this->powerMax << "\n";
-    fo << "      a_dim = nt*grd(1)\%nr*dm(1)\%nvar\n";
+    if (dim == 1) {
+        fo << "      a_dim = grd(1)\%nr*dm(1)\%nvar\n";
+    }
+    else if (dim == 2) {
+        fo << "      a_dim = nt*grd(1)\%nr*dm(1)\%nvar\n";
+    }
+    else {
+        err << "only dimension 1 and 2 are handled\n";
+            exit(EXIT_FAILURE);
+    }
     fo << "      dm(1)\%d_dim = a_dim\n";
-    fo << "      call find_llmax()\n";
+    if (this->dim == 2)
+        fo << "      call find_llmax()\n";
     fo << "      print*, 'Dimension of problem: ', a_dim\n";
 
     fo << "      call find_der_range(der_min, der_max)\n";
@@ -1527,9 +1633,11 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     fo << "      call init_var_list()\n";
 
     fo << "      ! lmax = maxval(dm(1)\%lvar)\n";
-    fo << "      call initialisation(nt, nr, m, lres, llmax)\n\n";
-    fo << "      call init_avg(dmat(1)\%derive(:, :, 0), dmat(1)\%lbder(0), " << 
-        "dmat(1)\%ubder(0))\n\n";
+    if (this->dim == 2)
+        fo << "      call initialisation(nt, nr, m, lres, llmax)\n\n";
+    if (this->dim == 2)
+        fo << "      call init_avg(dmat(1)\%derive(:, :, 0), dmat(1)\%lbder(0), " <<
+            "dmat(1)\%ubder(0))\n\n";
 
     fo << "      do j=1, nt\n";
     fo << "            ! zeta(1, j) = 1d0\n";
@@ -1571,8 +1679,6 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
                         && (e.first == "eq" + t->varName)
 #endif
                         ) {
-                    // t->expr->display(e.first + ": modify_l0 on term: (var: " +
-                    //        t->varName + "), (power: " + std::to_string(t->power) + ")");
                     modifyCalled = true;
                     varLm0Null[t->varName] = false; // do not set twice
                     fo << "      call modify_l0(" <<  t->getMatrix(FULL);
@@ -1591,14 +1697,14 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
     }
    fo << "      do j=1, nt\n";
-   fo << "            zeta(1, j) = 0d0\n";
-   fo << "            r_map(1, j) = 0d0\n";
+   fo << "            ! zeta(1, j) = 0d0\n";
+   fo << "            ! r_map(1, j) = 0d0\n";
    fo << "      enddo\n";
 
-   fo << "      call integrales_clear()\n";
+   if (this->dim == 2)
+       fo << "      call integrales_clear()\n";
 
    fo << "      ! call dump_coef()\n";
-
 
    fo << "\n      end subroutine init_a\n";
 
@@ -1607,6 +1713,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 std::string escapeLaTeX(const std::string& str) {
     std::string ret(str);
     int n = ret.find("_");
+
     while (n >= 0 && n < ret.length()) {
         ret.replace(n, 1, "\\_");
         n = ret.find("_", n+2);
@@ -1652,8 +1759,6 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
             lo << "fp";
         if (term->power > 1)
             lo << "^" << term->power;
-        if (term->power > 0)
-            lo << " * ";
     };
 
     std::function<void (ir::Expr *)> emitExpr = [&lo, term, &emitExpr] (ir::Expr *e) {
@@ -1684,11 +1789,18 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
                 lo << "}";
             }
             else if (be->getOp() == '^') {
-                emitExpr(be->getLeftOp());
-                lo << "^{";
-                emitExpr(be->getRightOp());
-                lo << "}";
-
+                ir::Value<float> onef(1);
+                ir::Value<int> onei(1);
+                if (*be->getLeftOp() == onef ||
+                        *be->getLeftOp() == onei ||
+                        *be->getLeftOp() == fp) {
+                }
+                else {
+                    emitExpr(be->getLeftOp());
+                    lo << "^{";
+                    emitExpr(be->getRightOp());
+                    lo << "}";
+                }
             }
             else {
                 if (be->getLeftOp()->priority < be->priority) {
@@ -1722,7 +1834,7 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
             lo << "\\ d\\Omega";
         }
         else if (auto fc = dynamic_cast<ir::FuncCall *>(e)) {
-            lo << escapeLaTeX(fc->name) << "\\Big(";
+            lo << renamer->name(fc->name) << "\\Big(";
             int narg = 0;
             for (auto a: fc->getArgs()) {
                 if (narg++ > 0)
@@ -1732,7 +1844,7 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
             lo << "\\Big)";
         }
         else if (auto id = dynamic_cast<ir::Identifier *>(e)) {
-            lo << escapeLaTeX(id->name);
+            lo << renamer->name(id->name);
         }
         else if (auto val = dynamic_cast<ir::Value<int> *>(e)) {
             lo << val->getValue();
@@ -1749,32 +1861,56 @@ void emitTermLaTeX(LatexOutput& lo, Term *term) {
     auto emitVar = [&lo, term] () {
         std::string& der = term->der;
         if (der == "0") {
-            lo << escapeLaTeX(term->var.name);
+            lo << renamer->name(term->var.name);
         }
         else {
             int der = atoi(term->der.c_str());
             if (der == 1) {
-                lo << "\\frac{\\partial " << escapeLaTeX(term->var.name) <<
+                lo << "\\frac{\\partial " << renamer->name(term->var.name) <<
                     "}{\\partial r}";
             }
             else {
                 lo << "\\frac{\\partial^{" << term->der << "} " <<
-                    escapeLaTeX(term->var.name) <<
+                   renamer->name(term->var.name) <<
                     "}{\\partial r^{" << term->der << "}}";
             }
         }
     };
 
     emitPower();
-    if (auto ue = dynamic_cast<ir::UnaryExpr *>(term->expr))
-        emitExpr(ue->getExpr());
-    else
-        emitExpr(term->expr);
-    lo << " &\\ * ";
+
+    lo << " & ";
+
+    ir::Value<float> onef(1);
+    if (auto ue = dynamic_cast<ir::UnaryExpr *>(term->expr)) {
+        if (*ue->getExpr() != onef) {
+            emitExpr(ue->getExpr());
+        }
+    }
+    else {
+        if (*term->expr != onef) {
+            emitExpr(term->expr);
+        }
+    }
+    lo << " &\\ \\ ";
     emitVar();
+    lo << "\\ \\ ";
 }
 
-void TopBackEnd::emitLaTeX(LatexOutput& lo) {
+void TopBackEnd::emitLaTeX(LatexOutput& lo, const std::string renameFile) {
+    renamer = new LaTeXRenamer();
+    if (renameFile != "") {
+        std::string pattern, rename;
+        std::ifstream f;
+
+        f.open(renameFile, std::fstream::in);
+        while (f >> pattern) {
+            f >> rename;
+            renamer->add(pattern, rename);
+        }
+        f.close();
+    }
+
     lo << "\\documentclass[10pt]{article}\n";
     lo << "\\usepackage{amsmath}\n";
     lo << "\\begin{document}\n";
@@ -1786,23 +1922,31 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
         int n = 0;
         for (auto t: eqs[e->name]) {
             if (t->getType() == AS ||
+                    t->getType() == AR ||
                     t->getType() == ART ||
                     t->getType() == ARTT) {
                 if (auto ue = dynamic_cast<ir::UnaryExpr *>(t->expr)) {
                     if (ue->getOp() != '-') {
                         unsupported(ue);
                     }
-                    lo << "&-";
+                    lo << "& -";
                     lo << "\\\\\n";
                 }
                 else {
                     if (n > 0) {
-                        lo << "&+";
+                        lo << "& +";
                         lo << "\\\\\n";
                     }
                 }
                 emitTermLaTeX(lo, t);
                 n++;
+            }
+            else if (t->getType() == ASBC ||
+                    t->getType() == ATBC) {
+            }
+            else {
+                err << "skipped term in LaTeX output!\n";
+                t->expr->display("skipped term");
             }
         }
         lo << " & = 0\n";
@@ -1812,4 +1956,6 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo) {
 }
 
 #undef unsupported
+#ifdef DEBUG
 #undef err
+#endif

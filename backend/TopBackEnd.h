@@ -7,8 +7,28 @@
 
 #include <map>
 
+std::string escapeLaTeX(const std::string&);
+class LaTeXRenamer : public std::map<std::string, std::string> {
+    public:
+        LaTeXRenamer() : std::map<std::string, std::string>() { }
+        void add(std::string name, std::string new_name) {
+            (*this)[name] = new_name;
+        }
+        std::string name(std::string name) {
+            try {
+                return this->at(name);
+            }
+            catch (std::out_of_range&) {
+                return escapeLaTeX(name);
+            }
+        }
+};
+extern LaTeXRenamer *renamer;
+
 typedef enum {
-    AS, ART, ARTT, ATBC, ATTBC
+    AS,
+    AR, ASBC,
+    ART, ARTT, ATBC, ATTBC
 } TermType;
 
 typedef enum {
@@ -25,7 +45,11 @@ class LlExpr {
         LlExpr(int, ir::Expr *);
 };
 
+class TopBackEnd;
 class Term {
+
+    protected:
+        TopBackEnd *backend;
 
     public:
         ir::Expr *expr;
@@ -41,11 +65,14 @@ class Term {
         int idx;
 
         Term(ir::Expr *expr, ir::Expr *llTerm, ir::Symbol var,
-                int power, std::string der, int ivar, std::string varName);
+                int power, std::string der, int ivar, std::string varName,
+                TopBackEnd* backend);
         virtual TermType getType();
         std::string getMatrix(IndexType);
         std::string getMatrixI();
         virtual void emitInitIndex(FortranOutput& o);
+
+        TopBackEnd *getBackend();
 };
 
 class TermBC : public Term {
@@ -93,16 +120,12 @@ class TopBackEnd : public BackEnd {
                 std::map<std::string, bool>&,
                 std::map<std::string, bool>&);
 
-        bool isVar(std::string);
-        bool isField(std::string);
-        bool isParam(std::string);
-        bool isScal(std::string);
-        bool isDef(std::string);
-
+        int nvar;
         int nas;
+        int nar;
+        int nasbc;
         int nartt;
         int nart;
-        int nvar;
         int natbc;
         int nattbc;
 
@@ -121,12 +144,20 @@ class TopBackEnd : public BackEnd {
         Term *buildTerm(ir::Expr *);
 
     public:
+        const int dim;
         int ivar(std::string);
         int ieq(std::string);
-        TopBackEnd(ir::Program *p);
+        TopBackEnd(ir::Program *p, int dim = 2);
         ~TopBackEnd();
         void emitCode(FortranOutput& of);
-        void emitLaTeX(LatexOutput& lo);
+        void emitLaTeX(LatexOutput& lo, const std::string = "");
+
+        bool isVar(std::string);
+        bool isField(std::string);
+        bool isParam(std::string);
+        bool isScal(std::string);
+        bool isDef(std::string);
+
 };
 
 #endif
