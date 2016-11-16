@@ -3,7 +3,7 @@ AM_CXXFLAGS = -I$(srcdir)/.. -I$(srcdir)/../ir -I$(srcdir)/../frontend \
 			  -I$(srcdir)/../backend
 
 noinst_bindir = $(abs_top_builddir)
-noinst_bin_PROGRAMS = readeq edl-top # edl-ester
+noinst_bin_PROGRAMS = readeq # edl-ester
 
 # edl_ester_SOURCES = edl-ester.cpp
 # edl_ester_LDADD = ../ir/libir.la ../frontend/libparser.la \
@@ -12,10 +12,5 @@ noinst_bin_PROGRAMS = readeq edl-top # edl-ester
 
 readeq_SOURCES = readeq.cpp
 readeq_LDADD = ../ir/libir.la ../frontend/libparser.la \
-				../backend/libtop-backend.la \
-				../utils/libutils.la
-
-edl_top_SOURCES = edl-top.cpp
-edl_top_LDADD = ../ir/libir.la ../frontend/libparser.la \
 				../backend/libtop-backend.la \
 				../utils/libutils.la
