@@ -103,7 +103,8 @@ void TopBackEnd::emitExpr(ir::Expr *expr, FortranOutput& fo,
     }
     else if (auto ue = dynamic_cast<ir::UnaryExpr *>(expr)) {
         if (ue->getOp() == '\'') {
-            err << "should not happen\n";
+            err << "should not happen since radial derivatives " <<
+                "where replaced with DiffExpr\n";
             exit(EXIT_FAILURE);
         }
         fo << ue->getOp() << "(";
@@ -782,6 +783,42 @@ bool haveLlTerms(ir::Expr *e) {
     return false;
 }
 
+ir::FuncCall *TopBackEnd::extractAvg(ir::Expr *e) {
+    assert(e);
+
+    if (auto fc = isAvg(e)) {
+        return fc;
+    }
+    else if (auto be = dynamic_cast<ir::BinExpr *>(e)) {
+        ir::FuncCall *l = extractAvg(be->getLeftOp());
+        ir::FuncCall *r = extractAvg(be->getRightOp());
+        if (l && r) {
+            err << "several avg expr in terms are not yet implemented\n";
+            exit(EXIT_FAILURE);
+        }
+        if (l) return l;
+        if (r) return r;
+    }
+    else if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
+        return extractAvg(ue->getExpr());
+    }
+    else if (dynamic_cast<ir::Identifier *>(e)) {
+        return NULL;
+    }
+    else if (dynamic_cast<ir::Value<int> *>(e)) {
+        return NULL;
+    }
+    else if (dynamic_cast<ir::Value<float> *>(e)) {
+        return NULL;
+    }
+    else {
+        err << "case not yet handled, sorry\n";
+        e->display();
+        exit(EXIT_FAILURE);
+    }
+    return NULL;
+}
+
 ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
     assert(e);
 
@@ -1044,6 +1081,9 @@ int TopBackEnd::findPower(ir::Expr *e) {
 }
 
 void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
+
+    ir::FuncCall *avg = extractAvg(term->expr);
+
     switch(term->getType()) {
         case AS:
         case ART:
@@ -1052,13 +1092,15 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
             fo << "\n";
             break;
         case AR:
-            if (ir::FuncCall *fc = isAvg(term->expr)) {
-                fo << "      call avg(";
-                emitExpr(fc->getArgs()[0], fo, term->ivar, term->ieq, true);
-                fo << ", " << term->getMatrix(FULL);
-                fo << ")";
+            if (avg) {
+                fo << "      " << term->getMatrix(FULL) << " = ";
+                fo << "1d0";
+                // fo << "      call avg(";
+                // emitExpr(fc->getArgs()[0], fo, term->ivar, term->ieq, true);
+                // fo << ", " << term->getMatrix(FULL);
+                // fo << ")";
             }
-            else {
+            else if (auto fc = dynamic_cast<ir::FuncCall *>(term->expr)) {
                 fo << "      " << term->getMatrix(FULL) << " = ";
                 emitExpr(term->expr, fo, term->ivar, term->ieq, true);
             }
@@ -1089,6 +1131,14 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
         default:
             err << "BC term not handled\n";
             exit(EXIT_FAILURE);
+    }
+
+    if (avg) {
+        fo << "      call avg(";
+        emitExpr(avg->getArgs()[0], fo, term->ivar, term->ieq, false);
+        fo << " * " << term->getMatrix(FULL);
+        fo << ", " << term->getMatrix(FULL);
+        fo << ")\n";
     }
 
     if (term->llExpr) {

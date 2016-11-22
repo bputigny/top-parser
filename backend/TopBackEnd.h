@@ -116,6 +116,7 @@ class TopBackEnd : public BackEnd {
         ir::FuncCall *findCoupling(ir::Expr *e);
         std::string findDerivativeOrder(ir::Identifier *);
         int findPower(ir::Expr *);
+        ir::FuncCall *extractAvg(ir::Expr *);
         ir::Expr *extractLlExpr(ir::Expr *);
 
         void simplify(ir::Expr *);
