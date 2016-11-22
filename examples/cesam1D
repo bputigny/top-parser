@@ -1,4 +1,3 @@
-input int lh
 input double mass
 input double Rota
 input double age
@@ -11,16 +10,10 @@ input double C1
 input double C2
 input double C3
 
-var Et, dP_P, Er, PhiP, Phi
+var dP_P, (Er, Et), PhiP, Phi
 
 field pm, g_m, r, rhom, dg_m, rhom_z
 scalar Gamma1, Lambda
-
-leq(eqdP_P) = 0
-leq(eqEr) = 0
-leq(eqEt) = 0
-leq(eqPhi) = 0
-leq(eqPhiP) = 0
 
 in
 
@@ -48,22 +41,22 @@ with (r=1)
 # this is equivalent to setting delta P/P_0 = 0 on the edge:
 # termbc s nr w0 1d0                      dP_P^-1(nr)
 
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
 equation eqEt:
 
 0 =
-    fp^2 * r    * dr(Et, -1) +
+    fp^2 * r    * dr(Et, -1) -
 # instruction if (lh.eq.0) $prev = 1d0
-    -pm/rhom    * dr(dP_P, -1) -
+    pm/rhom    * dr(dP_P, -1) -
     1.0         * dr(Phi, -1) -
     g_m         * dr(Er, -1)
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
 equation eqPhi:
 
 PhiP = Phi'
 with (r=1)
     lh * dr(Phi, -1) + (-r + max(0,1-lh)) * dr(PhiP, -1) = 0 at r = 0
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
 equation eqPhiP:
 
 0 = 
@@ -74,4 +67,4 @@ equation eqPhiP:
     avg(r^2*Lambda*rhom_z)          * Er
 with (r=1)
     r * dr(PhiP, -1) + dble(lh+1) * dr(Phi, -1) = 0 at r = 1
-# #-------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------

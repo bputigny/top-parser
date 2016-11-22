@@ -1,15 +1,7 @@
-<<<<<<< HEAD
-=======
-input int lres
->>>>>>> 3abd966... Add 2 cesam examples
 input int lmax
 input double mass
 input double Rota
 input double age
-<<<<<<< HEAD
-=======
-input int orderFD
->>>>>>> 3abd966... Add 2 cesam examples
 # input modelfile a256
 input string gridfile
 input int pert_model

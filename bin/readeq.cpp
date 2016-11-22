@@ -23,7 +23,7 @@ extern int yyerror(const char *s);
 extern FILE *yyin;
 
 void usage(char *bin) {
-    fprintf(stderr, "Usage: %s <input> [-o <output] [-f] [-v level]\n", bin);
+    fprintf(stderr, "Usage: %s <input>\n", bin);
 }
 
 void help(char *bin) {
@@ -31,8 +31,6 @@ void help(char *bin) {
     std::cerr << "OPTIONS:\n";
     std::cerr << std::left << std::setw(16) << "  -o filename" <<
         "\toutput file name\n";
-    // std::cerr << std::setw(20) <<
-    //     std::setw(30) << " (default: standard output)\n";
     std::cerr << std::setw(16) << "  -f" <<
         "\tforce: override output file (if exists)\n";
     std::cerr << std::setw(16) << "  -h" <<
@@ -45,6 +43,8 @@ void help(char *bin) {
         "\tdimension (n should be 1 or 2)\n";
     std::cerr << std::setw(16) << "  -r filename" <<
         "\trenaming file for LaTeX output\n";
+    std::cerr << std::setw(16) << "  -t derivative_type" <<
+        "\tradial derivative type (CHEB or FD)\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -54,10 +54,12 @@ int main(int argc, char* argv[]) {
     int nfile = 0;
     bool force = false, latex = false;
     int dim = 2;
+    std::string derTypeOpt("not set");
+    DerivativeType derType;
 
     Printer::init();
 
-    while ((c = getopt(argc, argv, "o:fhv:l:d:r:")) != EOF) {
+    while ((c = getopt(argc, argv, "o:fhv:l:d:r:t:")) != EOF) {
         switch (c) {
         case 'h':
             help(argv[0]);
@@ -86,6 +88,19 @@ int main(int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
             }
             break;
+        case 't':
+            derTypeOpt = std::string(optarg);
+            if (derTypeOpt == "CHEB") {
+                derType = CHEB;
+            }
+            else if (derTypeOpt == "FD") {
+                derType = FD;
+            }
+            else {
+                err << "unknown derivative type: `" << derTypeOpt << "'\n";
+                exit(EXIT_FAILURE);
+            }
+            break;
         }
     }
     if (optind < argc) {
@@ -110,9 +125,14 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // if (derTypeOpt == "not set") {
+    //     err << "derivative type not set\n";
+    //     exit(EXIT_FAILURE);
+    // }
+
     FrontEnd fe;
     ir::Program *p = fe.parse(*filename);
-    TopBackEnd topBackEnd(p, dim);
+    TopBackEnd topBackEnd(p, derType, dim);
     FortranOutput *o;
     std::ofstream ofs;
     if (outFileName) {

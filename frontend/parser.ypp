@@ -76,7 +76,7 @@ SphericalCoord spherical;
 %type<declList> declaration_list
 %type<exprLst> arg_list index_list
 %type<program> program
-%type<idList> var_names
+%type<idList> var_names vect_def
 
 %%
 
@@ -147,17 +147,26 @@ var_names
 | ID                                { $$ = new std::vector<ir::Identifier *>();
                                       $$->push_back(new ir::Identifier(*$1));
                                       delete $1; }
-| '(' ID ',' ID ',' ID ')'          { $$ = new std::vector<ir::Identifier *>();
+| vect_def                          { $$ = $1; }
+| var_names ',' vect_def            { $$ = $1;
+                                        for (auto v: *$3) {
+                                            $$->push_back(new ir::Identifier(*v));
+                                            delete v;
+                                        }
+                                    }
+;
+
+vect_def
+: '(' ID ',' ID ',' ID ')'          { $$ = new std::vector<ir::Identifier *>();
                                       $$->push_back(new ir::Identifier(*$2, 1));
                                       $$->push_back(new ir::Identifier(*$4, 2));
                                       $$->push_back(new ir::Identifier(*$6, 3));
                                       delete $2, delete $4, delete $6; }
-| var_names ',' '(' ID ',' ID ',' ID ')' {
-                                      $$ = $1;
-                                      $$->push_back(new ir::Identifier(*$4, 1));
-                                      $$->push_back(new ir::Identifier(*$6, 2));
-                                      $$->push_back(new ir::Identifier(*$8, 3));
-                                      delete $4, delete $6, delete $8; }
+
+| '(' ID ',' ID ')'                 { $$ = new std::vector<ir::Identifier *>();
+                                      $$->push_back(new ir::Identifier(*$2, 1));
+                                      $$->push_back(new ir::Identifier(*$4, 2));
+                                      delete $2, delete $4; }
 ;
 
 expr

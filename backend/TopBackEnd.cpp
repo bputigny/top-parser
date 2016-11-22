@@ -24,6 +24,16 @@ ir::Identifier fp("fp");
 ir::Identifier l("l");
 ir::UnaryExpr ll(&l, '\'');
 
+const std::map<std::string, ir::Symbol *>
+    TopBackEnd::internalVariables = {
+        {"shift",   new ir::Param("shift",      "double")},
+        {"l",       new ir::Param("l",          "int")},
+        {"m",       new ir::Param("m",          "int")},
+        {"iparity", new ir::Param("iparity",    "int")},
+        {"lh",      new ir::Param("lh",         "int")},
+        {"lres",    new ir::Param("lres",       "int")}
+    };
+
 LlExpr::LlExpr(int ivar, ir::Expr *expr) {
     this->ivar = ivar;
     this->expr = expr;
@@ -232,7 +242,7 @@ std::string Term::getMatrix(IndexType it) {
                 case FULL:
                     return "dm(1)\%asbc(" + idx + ")";
                 default:
-                    err << "cannot access subscript of `ATBC\' terms\n";
+                    err << "cannot access subscript of `ASBC\' terms\n";
                     exit(EXIT_FAILURE);
             }
         case ATBC:
@@ -330,7 +340,12 @@ TermType Term::getType() {
         if (llExpr) {
             // TODO: not sure it is correct: we can have a rtt term if the
             // llExpr depends on l'
-            return ART;
+            if (backend->dim == 2)
+                return ART;
+            else if (backend->dim == 1)
+                return AS;
+            err << "dimension " << backend->dim << " not supported\n";
+            exit(EXIT_FAILURE);
         }
         else {
             std::vector<ir::Identifier *> ids = getIds(expr, true);
@@ -470,10 +485,12 @@ Term *TopBackEnd::buildTerm(ir::Expr *t) {
     }
 #endif
 
+#if 0
     if (llExpr && dim == 1) {
         err << "cannot have ll expression with 1D equation\n";
         exit(EXIT_FAILURE);
     }
+#endif
     return new Term(expr, llExpr,
             ir::Symbol(var->name),
             power, der, ivar, varName, this);
@@ -612,7 +629,8 @@ void TopBackEnd::buildTermList(std::list<ir::Equation *> eqs) {
     }
 }
 
-TopBackEnd::TopBackEnd(ir::Program *p, int dim) : dim(dim) {
+TopBackEnd::TopBackEnd(ir::Program *p, DerivativeType derType, int dim) :
+    derType(derType), dim(dim) {
     this->prog = p;
     this->nas = 0;
     this->nartt = 0;
@@ -627,8 +645,9 @@ TopBackEnd::TopBackEnd(ir::Program *p, int dim) : dim(dim) {
     buildTermList(eqs);
 
     // add internal definitions
-    this->prog->getSymTab().add(new ir::Param("m", "int"));
-    this->prog->getSymTab().add(new ir::Param("iparity", "int"));
+    for (auto s: internalVariables) {
+        this->prog->getSymTab().add(s.second);
+    }
 }
 
 TopBackEnd::~TopBackEnd() { }
@@ -763,6 +782,9 @@ bool haveLlTerms(ir::Expr *e) {
 
 ir::Expr *TopBackEnd::extractLlExpr(ir::Expr *e) {
     assert(e);
+
+    if (this->dim == 1)
+        return NULL;
 
     if (auto ue = dynamic_cast<ir::UnaryExpr *>(e)) {
         if (auto ll = extractLlExpr(ue->getExpr())) {
@@ -1076,7 +1098,7 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
                 fo << "                  " << term->getMatrix(T) <<
                     " " << term->llExpr->op << " &\n";
             }
-            else if (term->getType() == ARTT ){
+            else if (term->getType() == ARTT){
                 fo << "      do j=1, nt\n";
                 fo << "            " << term->getMatrix(T) <<
                     " = &\n";
@@ -1148,6 +1170,13 @@ void TopBackEnd::emitTerm(FortranOutput& fo, TermBC *term) {
                 fo << "            " << term->getMatrix(T) <<
                     " = &\n";
                 fo << "                  " << term->getMatrix(T) <<
+                    " " << term->llExpr->op << " &\n";
+            }
+            else if (term->getType() == ASBC) {
+                fo << "      do j=1, nt\n";
+                fo << "            " << term->getMatrix(FULL) <<
+                    " = &\n";
+                fo << "                  " << term->getMatrix(FULL) <<
                     " " << term->llExpr->op << " &\n";
             }
             else if (term->getType() == ATTBC ){
@@ -1477,7 +1506,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     inputs.close();
 
     for (auto e: prog->getEqs()) {
-        leq_set[e->name] = false;;
+        leq_set[e->name] = false;
     }
 
     fo << "\n      subroutine init_a()\n\n";
@@ -1503,18 +1532,21 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
     for (auto d: prog->getDecls()) {
         emitDecl(fo, d, lvar_set, leq_set);
     }
-    for (auto v: vars) {
-        fo << "      dm(1)%lvar(1, " << ivar(v->name) << ") = ";
-        if (v->vectComponent == 3)
-            fo << "abs(m) + 1 - iparity\n";
-        else
-            fo << "abs(m) + iparity\n";
-    }
 
-    for (auto le: leq_set) {
-        if (le.second == false) {
-            err << "leq for equation `" << le.first << "\' is not set\n";
-            exit(EXIT_FAILURE);
+    if (dim == 2) {
+        for (auto v: vars) {
+            fo << "      dm(1)%lvar(1, " << ivar(v->name) << ") = ";
+            if (v->vectComponent == 3)
+                fo << "abs(m) + 1 - iparity\n";
+            else
+                fo << "abs(m) + iparity\n";
+        }
+
+        for (auto le: leq_set) {
+            if (le.second == false) {
+                err << "leq for equation `" << le.first << "\' is not set\n";
+                exit(EXIT_FAILURE);
+            }
         }
     }
 
@@ -1660,12 +1692,42 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
             varLm0Null[v->name] = false;
     }
 
+    if (dim == 1) {
+        for (auto v: vars) {
+            if (varLm0Null[v->name]) {
+                // look for all terms in equation and enforce at least one of them
+                // is not 0 (if l == 0)
+                bool done = false;
+                for (auto e : eqs) {
+                    for (auto t: e.second) {
+                        if (!dynamic_cast<TermBC *>(t)) {
+                            if (t->varName == v->name) {
+                                auto ids = getIds(t->expr, true);
+                                // if (ids.size() == 1 && ids[0]->name == "lh"
+                                //         && done == false) {
+                                if (t->getType() == AR) {
+                                    fo << "      if (lh == 0)";
+                                    fo << t->getMatrix(FULL) << " =  1d0\n";
+                                    done = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!done) {
+                    err << "Failed to modify term on " << v->name <<
+                        " the matrix will be singular\n";
+                }
+            }
+        }
+    }
+
     for (auto e: eqs) {
         bool eqNeedModifyL0 = true;
         for (auto t: e.second) {
-            if (t->getType() == AS)
+            if (t->getType() == AS || t->getType() == AR)
                 eqNeedModifyL0 = false;
-            if (auto fc = dynamic_cast<ir::FuncCall *>(t->expr)) {
+            if (auto fc = isCoupling(t->expr)) {
                 if (std::strstr(fc->name.c_str(), "Illm") && t->llExpr == NULL) {
                     eqNeedModifyL0 = false;
                 }
@@ -1678,7 +1740,7 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 #if 1
                         && (e.first == "eq" + t->varName)
 #endif
-                        ) {
+                   ) {
                     modifyCalled = true;
                     varLm0Null[t->varName] = false; // do not set twice
                     fo << "      call modify_l0(" <<  t->getMatrix(FULL);
@@ -1690,23 +1752,24 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
             }
             if (modifyCalled == false) {
                 err << "could not find a spot to insert modify_l0 in `" <<
-                e.first << "\'\n";
+                    e.first << "\'\n";
                 exit(EXIT_FAILURE);
             }
         }
 
     }
-   fo << "      do j=1, nt\n";
-   fo << "            ! zeta(1, j) = 0d0\n";
-   fo << "            ! r_map(1, j) = 0d0\n";
-   fo << "      enddo\n";
+    fo << "      do j=1, nt\n";
+    fo << "            ! zeta(1, j) = 0d0\n";
+    fo << "            ! r_map(1, j) = 0d0\n";
+    fo << "      enddo\n";
 
-   if (this->dim == 2)
-       fo << "      call integrales_clear()\n";
+    if (this->dim == 2)
+        fo << "      call integrales_clear()\n";
 
-   fo << "      ! call dump_coef()\n";
+    fo << "      ! call dump_coef()\n";
 
-   fo << "\n      end subroutine init_a\n";
+    fo << "      grd(1)\%r(1) = 0\n\n";
+    fo << "\n      end subroutine init_a\n";
 
 }
 

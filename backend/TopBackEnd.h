@@ -26,6 +26,11 @@ class LaTeXRenamer : public std::map<std::string, std::string> {
 extern LaTeXRenamer *renamer;
 
 typedef enum {
+    CHEB,
+    FD
+} DerivativeType;
+
+typedef enum {
     AS,
     AR, ASBC,
     ART, ARTT, ATBC, ATTBC
@@ -87,6 +92,8 @@ class TermBC : public Term {
 
 class TopBackEnd : public BackEnd {
 
+    static const std::map<std::string, ir::Symbol *> internalVariables;
+
     private:
         ir::Program *prog;
         std::list<ir::Variable *> vars;
@@ -138,6 +145,7 @@ class TopBackEnd : public BackEnd {
 
         void buildVarList();
         int computeTermIndex(Term *);
+        DerivativeType derType;
 
         /// this constructs a Term object based on the expression given as
         /// argument
@@ -147,7 +155,7 @@ class TopBackEnd : public BackEnd {
         const int dim;
         int ivar(std::string);
         int ieq(std::string);
-        TopBackEnd(ir::Program *p, int dim = 2);
+        TopBackEnd(ir::Program *p, DerivativeType, int dim = 2);
         ~TopBackEnd();
         void emitCode(FortranOutput& of);
         void emitLaTeX(LatexOutput& lo, const std::string = "");
