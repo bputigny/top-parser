@@ -31,7 +31,9 @@ const std::map<std::string, ir::Symbol *>
         {"m",       new ir::Param("m",          "int")},
         {"iparity", new ir::Param("iparity",    "int")},
         {"lh",      new ir::Param("lh",         "int")},
-        {"lres",    new ir::Param("lres",       "int")}
+        {"lres",    new ir::Param("lres",       "int")},
+        {"orderFD", new ir::Param("orderFD",    "int")},
+        {"nsol",    new ir::Param("nsol",       "int")},
     };
 
 LlExpr::LlExpr(int ivar, ir::Expr *expr) {
@@ -1419,10 +1421,6 @@ void TopBackEnd::emitInitA(FortranOutput& fo) {
 
     inputs << "    character*(4), save :: mattype\n";
     inputs << "    character*(4), save :: dertype\n";
-    inputs << "    double precision, save :: shift\n";
-    inputs << "    integer, save :: lres\n";
-    inputs << "    integer, save :: orderFD\n";
-    inputs << "    integer, save :: nsol\n";
 
     for (auto s: this->prog->getSymTab()) {
         if (dynamic_cast<ir::Variable *>(s)) {
