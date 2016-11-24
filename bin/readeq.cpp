@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     std::string derTypeOpt("not set");
     DerivativeType derType;
 
-    Printer::init();
+    logger::Printer::init();
 
     while ((c = getopt(argc, argv, "o:fhv:l:d:r:t:")) != EOF) {
         switch (c) {
@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
             outFileName = new std::string(optarg);
             break;
         case 'v':
-            Printer::init(atoi(optarg));
+            logger::Printer::init(atoi(optarg));
             break;
         case 'l':
             latex = true;
@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
                 derType = FD;
             }
             else {
-                err << "unknown derivative type: `" << derTypeOpt << "'\n";
+                logger::err << "unknown derivative type: `" << derTypeOpt << "'\n";
                 exit(EXIT_FAILURE);
             }
             break;
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
             filename = new std::string(argv[optind + nfile]);
             yyin = fopen(filename->c_str(), "r");
             if (!yyin) {
-                err << "cannot open input file `" << *filename << "'\n";
+                logger::err << "cannot open input file `" << *filename << "'\n";
                 exit(EXIT_FAILURE);
             }
             nfile++;
@@ -121,12 +121,12 @@ int main(int argc, char* argv[]) {
 
 
     if (!force && access(optarg, F_OK) != -1) {
-        err << "File `" << optarg << "' already exists\n";
+        logger::err << "File `" << optarg << "' already exists\n";
         exit(EXIT_FAILURE);
     }
 
     // if (derTypeOpt == "not set") {
-    //     err << "derivative type not set\n";
+    //     logger::err << "derivative type not set\n";
     //     exit(EXIT_FAILURE);
     // }
 

@@ -161,7 +161,7 @@ void Program::buildSymTab() {
             symTab->add(var);
         }
         else {
-            err << "affecting expression to non variable type\n";
+            logger::err << "affecting expression to non variable type\n";
         }
     }
 
@@ -171,7 +171,7 @@ void Program::buildSymTab() {
         auto checkDefined = [this] (ir::Identifier *s) -> void {
             std::string name = s->name;
             if (this->symTab->search(name) == NULL)
-                err << "undefined symbol: `" << name << "'\n";
+                logger::err << "undefined symbol: `" << name << "'\n";
         };
         a.run(checkDefined, e);
     }
@@ -226,7 +226,7 @@ void Decl::dump(std::ostream& os) const {
 }
 
 bool Decl::operator==(Node& n) {
-    err << "not yet implemented\n";
+    logger::err << "not yet implemented\n";
     return false;
 }
 
@@ -254,7 +254,7 @@ Equation::Equation(std::string name,
         }
     }
     else {
-        err << "both sides of equation should be of same type (scalar or vectorial)\n";
+        logger::err << "both sides of equation should be of same type (scalar or vectorial)\n";
         lhs->display();
         if (rhs)
             rhs->display();
@@ -293,7 +293,7 @@ Expr *Equation::getRHS() const {
 }
 
 bool Equation::operator==(Node& n) {
-    err << "not yet implemented\n";
+    logger::err << "not yet implemented\n";
     return false;
 }
 
@@ -335,7 +335,7 @@ int BC::getEqLoc() const {
 }
 
 bool BC::operator==(Node& n) {
-    err << "not yet implemented\n";
+    logger::err << "not yet implemented\n";
     return false;
 }
 

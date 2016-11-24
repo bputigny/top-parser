@@ -9,6 +9,8 @@
 extern std::string *filename;
 extern int yylineno;
 
+namespace logger {
+
 class Printer {
     std::string pref;
     std::ostream &os;
@@ -28,5 +30,8 @@ class Printer {
 };
 
 extern Printer err, log, warn;
+
+}
+
 
 #endif // PRINTER_H

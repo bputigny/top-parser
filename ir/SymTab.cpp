@@ -22,7 +22,7 @@ void SymTab::add(ir::Symbol *s) {
     if (this->search(s->name) == NULL)
         std::list<ir::Symbol *>::push_back(s);
     else {
-        err << s->name << " already defined\n";
+        logger::err << s->name << " already defined\n";
         exit(EXIT_FAILURE);
     }
 }

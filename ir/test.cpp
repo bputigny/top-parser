@@ -5,7 +5,7 @@
 
 int main() {
 
-    Printer::init(2);
+    logger::Printer::init(2);
     std::ofstream file;
 
     {

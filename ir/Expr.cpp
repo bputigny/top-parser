@@ -19,7 +19,7 @@ bool isVect(Expr *e) {
 ScalarExpr *scalar(Expr *e) {
     if (auto s = dynamic_cast<ScalarExpr *>(e))
         return s;
-    err << "cannot cast vector expression to scalar expression\n";
+    logger::err << "cannot cast vector expression to scalar expression\n";
     exit(EXIT_FAILURE);
 }
 
@@ -30,7 +30,7 @@ ScalarExpr& scalar(Expr& e) {
 VectExpr *vector(Expr *e) {
     if (auto s = dynamic_cast<VectExpr *>(e))
         return s;
-    err << "cannot cast scalar expression to vector expression\n";
+    logger::err << "cannot cast scalar expression to vector expression\n";
     exit(EXIT_FAILURE);
 }
 
@@ -69,7 +69,7 @@ Expr *Expr::copy() const {
     else if (auto e = dynamic_cast<const VectExpr *>(this)) {
         return new VectExpr(*e);
     }
-    err << "copy of node type not yet implemented\n";
+    logger::err << "copy of node type not yet implemented\n";
     exit(EXIT_FAILURE);
 }
 
@@ -94,7 +94,7 @@ int getPriority(char c) {
             return 1;
             break;
     }
-    err << "unsupported binary operator: \"" << c << "\"";
+    logger::err << "unsupported binary operator: \"" << c << "\"";
     exit(EXIT_FAILURE);
 }
 
@@ -374,7 +374,7 @@ ExprLst FuncCall::getArgs() const {
     ExprLst ret;
     for (auto arg: children) {
         if (!dynamic_cast<Expr *>(arg)) {
-            err << "arg is not an expression\n";
+            logger::err << "arg is not an expression\n";
             exit(EXIT_FAILURE);
         }
         ret.push_back(dynamic_cast<Expr *>(arg));
@@ -419,7 +419,7 @@ ExprLst ArrayExpr::getIndices() const {
 }
 
 bool ArrayExpr::operator==(Node& n) {
-    err << "not yet implemented\n";
+    logger::err << "not yet implemented\n";
     return false;
 }
 
@@ -477,7 +477,7 @@ ScalarExpr *VectExpr::getComponent(int n) const {
         return c;
     }
     else {
-        err << "vector components should be expression\n";
+        logger::err << "vector components should be expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -511,7 +511,7 @@ BinExpr *div(Expr &e) {
         return new BinExpr(dx, '+', new BinExpr(dy, '+', dz));
     }
     catch (std::bad_cast) {
-        err << "div can only be applied to vector expression\n";
+        logger::err << "div can only be applied to vector expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -717,7 +717,7 @@ VectExpr crossProduct(const Expr& e1, const Expr& e2) {
                 u1*v2 - u2*v1);
     }
     catch (std::bad_cast) {
-        err << "cross product con only be applied to vectors\n";
+        logger::err << "cross product con only be applied to vectors\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -731,7 +731,7 @@ BinExpr dotProduct(const Expr& e1, const Expr& e2) {
             *v1.getZ() * *v2.getZ();
     }
     catch (std::bad_cast) {
-        err << "dot product con only be applied to vectors\n";
+        logger::err << "dot product con only be applied to vectors\n";
         exit(EXIT_FAILURE);
     }
 }

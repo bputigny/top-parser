@@ -24,7 +24,7 @@ ir::VectExpr CartesianCoord::grad(const ir::Expr& e) {
         return ir::VectExpr(dx, dy, dz);
     }
     catch (std::bad_cast) {
-        err << "grad can only be applied to scalar expression\n";
+        logger::err << "grad can only be applied to scalar expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -38,7 +38,7 @@ ir::BinExpr CartesianCoord::div(const ir::Expr &e) {
         return dx + dy + dz;
     }
     catch (std::bad_cast) {
-        err << "div can only be applied to vector expression\n";
+        logger::err << "div can only be applied to vector expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -60,7 +60,7 @@ ir::VectExpr CartesianCoord::curl(const ir::Expr& e) {
                 dydx - dxdy);
     }
     catch (std::bad_cast) {
-        err << "grad can only be applied to scalar expression\n";
+        logger::err << "grad can only be applied to scalar expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -102,7 +102,7 @@ ir::BinExpr SphericalCoord::div(const ir::Expr& e) {
 
     }
     catch (std::bad_cast) {
-        err << "div can only be applied to vector expression\n";
+        logger::err << "div can only be applied to vector expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -116,7 +116,7 @@ ir::VectExpr SphericalCoord::grad(const ir::Expr& e) {
         return ir::VectExpr(gr, gt, gp);
     }
     catch (std::bad_cast) {
-        err << "grad can only be applied to scalar expression\n";
+        logger::err << "grad can only be applied to scalar expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -137,7 +137,7 @@ ir::VectExpr SphericalCoord::curl(const ir::Expr& e) {
                 1/r * (dR(r*vt) - dTheta(vr)));
     }
     catch (std::bad_cast) {
-        err << "curl can only be applied to vector expression\n";
+        logger::err << "curl can only be applied to vector expression\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -158,7 +158,7 @@ ir::DiffExpr SpheroidalCoord::dPhi(const ir::ScalarExpr& s) {
 }
 
 ir::BinExpr SpheroidalCoord::div(const ir::Expr&) {
-    err << "div in spheroidal coordinate not yet implemented\n";
+    logger::err << "div in spheroidal coordinate not yet implemented\n";
     exit(EXIT_FAILURE);
 }
 
@@ -171,12 +171,12 @@ ir::VectExpr SpheroidalCoord::grad(const ir::Expr& e) {
         return ir::VectExpr(gz, gt, gp);
     }
     catch (std::bad_cast) {
-        err << "grad can only be applied to scalar expression\n";
+        logger::err << "grad can only be applied to scalar expression\n";
         exit(EXIT_FAILURE);
     }
 }
 
 ir::VectExpr SpheroidalCoord::curl(const ir::Expr&) {
-    err << "curl in spheroidal coordinate not yet implemented\n";
+    logger::err << "curl in spheroidal coordinate not yet implemented\n";
     exit(EXIT_FAILURE);
 }

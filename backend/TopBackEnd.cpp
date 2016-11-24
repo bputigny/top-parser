@@ -15,7 +15,10 @@
 
 #ifdef DEBUG
 #define err \
-    err <<  __FILE__ << ":" << __LINE__ << ": "
+    logger::err <<  __FILE__ << ":" << __LINE__ << ": "
+#else
+#define err \
+    logger::err
 #endif
 
 LaTeXRenamer *renamer;
@@ -44,7 +47,7 @@ LlExpr::LlExpr(int ivar, ir::Expr *expr) {
         this->op = be->getOp();
     }
     else {
-        warn << "Could not find llExpr parents\n";
+        logger::warn << "Could not find llExpr parents\n";
         this->op = '*';
         // exit(EXIT_FAILURE);
     }
@@ -378,7 +381,7 @@ void TopBackEnd::checkCoupling(ir::Expr *expr) {
         exit(EXIT_FAILURE);
     }
     if (singlePrint++ == 0) {
-        warn << "check coupling correctly...\n";
+        logger::warn << "check coupling correctly...\n";
     }
 }
 
@@ -2067,6 +2070,4 @@ void TopBackEnd::emitLaTeX(LatexOutput& lo, const std::string renameFile) {
 }
 
 #undef unsupported
-#ifdef DEBUG
 #undef err
-#endif

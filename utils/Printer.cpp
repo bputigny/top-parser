@@ -1,7 +1,9 @@
 #include "Printer.h"
 #include "config.h"
 
-int Printer::verbosity = 0;
+namespace logger {
+
+int logger::Printer::verbosity = 0;
 
 Printer::Printer(const std::string& str, std::ostream& stream, int level) :
     pref(str), os(stream) {
@@ -43,3 +45,5 @@ std::ostream& Printer::stream() {
 Printer err("[error]: ",    std::cerr, 0);
 Printer warn("[warning]: ", std::cerr, 1);
 Printer log("[log]: ",      std::cerr, 2);
+
+}

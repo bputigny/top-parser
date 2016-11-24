@@ -328,7 +328,7 @@ bc
 %%
 
 int yyerror(const char *s) {
-    err <<  "Error at " << *filename << ":" << yylineno << ": "
+    logger::err <<  "Error at " << *filename << ":" << yylineno << ": "
         << s << "\n";
     exit(1);
 }
