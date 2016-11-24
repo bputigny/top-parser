@@ -7,7 +7,7 @@ void DOT::displayFile(const std::string& file) {
     std::string cmd = "dot -Txlib " + file + " &";
     system(cmd.c_str());
 #else
-    err() << "cannot disply graph in `" << file << "': graphviz (dot) not found\n";
+    logger::err << "cannot disply graph in `" << file << "': graphviz (dot) not found\n";
 #endif
 }
 
