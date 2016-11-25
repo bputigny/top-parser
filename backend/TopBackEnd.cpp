@@ -1103,7 +1103,7 @@ void TopBackEnd::emitTerm(FortranOutput& fo, Term *term) {
                 // fo << ", " << term->getMatrix(FULL);
                 // fo << ")";
             }
-            else if (auto fc = dynamic_cast<ir::FuncCall *>(term->expr)) {
+            else {
                 fo << "      " << term->getMatrix(FULL) << " = ";
                 emitExpr(term->expr, fo, term->ivar, term->ieq, true);
             }
