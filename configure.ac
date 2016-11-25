@@ -20,7 +20,13 @@ AC_LANG([C++])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_LEX
+AC_CHECK_PROG([LEX_EXISTS], [$LEX], [yes], [no])
+AS_IF([test "x$LEX_EXISTS" = "xno"],
+      [AC_ERROR(lex is missing)])
 AC_PROG_YACC
+AC_CHECK_PROG([YACC_EXISTS], [$YACC], [yes], [no])
+AS_IF([test "x$YACC_EXISTS" = "xno"],
+      [AC_ERROR(yacc is missing)])
 AC_PROG_LIBTOOL
 AC_CHECK_PROG(DOT, dot, no)
 AS_IF([test "x$DOT" = "xno"], [AC_DEFINE(HAVE_DOT, [1], [is dot installed])])
@@ -73,6 +79,8 @@ AC_OUTPUT
 
 cat << EOF
 
+LEX:        $LEX
+YACC:       $YACC
 CXX:        $CXX
 CXXFLAGS:   $CXXFLAGS
 DEBUG:      $debug
