@@ -17,4 +17,7 @@ test_frontend_SOURCES = test.cpp
 test_frontend_LDADD = libparser.la ../ir/libir.la ../utils/libutils.la
 
 clean-local:
-	rm -f parser.hpp parser.cpp scanner.cpp
+	rm -f parser.h parser.hpp parser.cpp scanner.cpp
+
+.h.hpp:
+	cp $< $@
