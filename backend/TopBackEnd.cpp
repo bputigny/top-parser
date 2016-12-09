@@ -1032,7 +1032,10 @@ int TopBackEnd::findPower(ir::Expr *e) {
                     unsupported(e);
                 break;
             case '-':
-                unsupported(e);
+                if (findPower(be->getLeftOp()) == findPower(be->getRightOp()))
+                    return findPower(be->getLeftOp());
+                else
+                    unsupported(e);
                 break;
             case '*':
                 return findPower(be->getLeftOp()) + findPower(be->getRightOp());
