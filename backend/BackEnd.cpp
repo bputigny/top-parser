@@ -2,13 +2,11 @@
 
 #include <cstring>
 
-void FortranOutput::checkLineLen() {
-#if 1
-    if (lineLen > 65) {
-        os << "&\n&";
-        lineLen = 1;
+void FortranOutput::checkLineLen(const std::string& str) {
+    if (lineLen + str.length() > 79) {
+        os << "&\n& ";
+        lineLen = 2;
     }
-#endif
 }
 
 Output::Output(std::ostream& os) : os(os) { }

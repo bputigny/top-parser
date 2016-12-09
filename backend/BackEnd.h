@@ -27,13 +27,13 @@ class FortranOutput : public Output {
     protected:
         int lineLen;
 
-        void checkLineLen();
+        void checkLineLen(const std::string& str);
 
     public:
         FortranOutput(std::ostream&);
 
         inline FortranOutput& operator<<(const std::string& str) {
-            checkLineLen();
+            checkLineLen(str);
             lineLen += str.length();
             if (str[str.length()-1] == '\n')
                 lineLen = 0;
@@ -41,7 +41,7 @@ class FortranOutput : public Output {
             return (*this);
         }
         inline FortranOutput& operator<<(const char *str) {
-            checkLineLen();
+            checkLineLen(std::string(str));
             lineLen += std::strlen(str);
             if (str[std::strlen(str)-1] == '\n')
                 lineLen = 0;
@@ -50,7 +50,7 @@ class FortranOutput : public Output {
         }
         template <typename T>
         inline FortranOutput& operator<<(const T& t) {
-            checkLineLen();
+            checkLineLen(std::to_string(t));
             lineLen += std::to_string(t).length();
             os << t;
             return (*this);
