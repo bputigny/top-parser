@@ -132,6 +132,7 @@ int main(int argc, char* argv[]) {
 
     FrontEnd fe;
     ir::Program *p = fe.parse(*filename);
+    p->display();
     TopBackEnd topBackEnd(p, derType, dim);
     FortranOutput *o;
     std::ofstream ofs;
